@@ -11,7 +11,7 @@
 #include <boost/math/distributions/normal.hpp>
 #include <filesystem> 
 #include <limits>
-//source /cvmfs/sft.cern.ch/lcg/views/LCG_104/x86_64-el9-gcc11-opt/setup.sh if on lxplus
+
 //g++ -o quirk_run quirk_run.cxx
 // Constants (based on the Mathematica script)
 const double ZCu = 29;
@@ -133,31 +133,6 @@ double Eox(double m, double z, double ZoA, double rho, double I0, double x0, dou
     // Return a vector where each component is the same scalar value
     
     return scalar;
-}*/
-
-double EoxCuAll(double mq, int param, double beta) {
-    //de/dx copper
-    //EoxCuAll with recasting variables to long double
-    long double mq_ld = static_cast<long double>(mq);
-    long double beta_ld = static_cast<long double>(beta);
-    long double scalar;
-    long double ZCu_eff = 1.0L;
-
-    if (beta_ld <= 0.00226L) {
-        scalar = 37597.30061169589L * beta_ld;
-    } else if (beta_ld >= 0.06345454545454546L) {
-        scalar = static_cast<long double>(Eox(static_cast<double>(mq_ld), static_cast<double>(ZCu_eff), ZoACu, rhoCu, I0Cu, x0Cu, x1Cu, CbarCu, aCu, kCu, d0Cu, static_cast<double>(beta_ld))) * 0.197L;
-    } else {
-        scalar = 0.34289008715835223L + 33909.5576744394L * beta_ld + 2.6438521703577857e6L * std::pow(beta_ld, 2)
-                 - 5.582148886272709e8L * std::pow(beta_ld, 3) + 3.916027090833348e10L * std::pow(beta_ld, 4)
-                 - 1.6320734910018296e12L * std::pow(beta_ld, 5) + 4.608165819030902e13L * std::pow(beta_ld, 6)
-                 - 9.294312877895761e14L * std::pow(beta_ld, 7) + 1.370510669479835e16L * std::pow(beta_ld, 8)
-                 - 1.486143034696763e17L * std::pow(beta_ld, 9) + 1.174756123051605e18L * std::pow(beta_ld, 10)
-                 - 6.596425471576249e18L * std::pow(beta_ld, 11) + 2.496247979943447e19L * std::pow(beta_ld, 12)
-                 - 5.714216718459019e19L * std::pow(beta_ld, 13) + 5.982648430710585e19L * std::pow(beta_ld, 14);
-    }
-
-    return static_cast<double>(scalar);
 }
 
 
@@ -200,6 +175,85 @@ double EoxRockAll(double mq, int param, double beta) {
                  - 5.34284980622759e19 * std::pow(beta, 13) + 5.686153048402872e19 * std::pow(beta, 14);
     }
     return scalar;
+}*/
+
+
+
+
+
+
+double EoxCuAll(double mq, int param, double beta) {
+    //de/dx copper
+    //EoxCuAll with recasting variables to long double
+    long double mq_ld = static_cast<long double>(mq);
+    long double beta_ld = static_cast<long double>(beta);
+    long double scalar;
+    long double ZCu_eff = 1.0L;
+
+    if (beta_ld <= 0.00226L) {
+        scalar = 37597.30061169589L * beta_ld;
+    } else if (beta_ld >= 0.06345454545454546L) {
+        scalar = static_cast<long double>(Eox(static_cast<double>(mq_ld), static_cast<double>(ZCu_eff), ZoACu, rhoCu, I0Cu, x0Cu, x1Cu, CbarCu, aCu, kCu, d0Cu, static_cast<double>(beta_ld))) * 0.197L;
+    } else {
+        scalar = 0.34289008715835223L + 33909.5576744394L * beta_ld + 2.6438521703577857e6L * std::pow(beta_ld, 2)
+                 - 5.582148886272709e8L * std::pow(beta_ld, 3) + 3.916027090833348e10L * std::pow(beta_ld, 4)
+                 - 1.6320734910018296e12L * std::pow(beta_ld, 5) + 4.608165819030902e13L * std::pow(beta_ld, 6)
+                 - 9.294312877895761e14L * std::pow(beta_ld, 7) + 1.370510669479835e16L * std::pow(beta_ld, 8)
+                 - 1.486143034696763e17L * std::pow(beta_ld, 9) + 1.174756123051605e18L * std::pow(beta_ld, 10)
+                 - 6.596425471576249e18L * std::pow(beta_ld, 11) + 2.496247979943447e19L * std::pow(beta_ld, 12)
+                 - 5.714216718459019e19L * std::pow(beta_ld, 13) + 5.982648430710585e19L * std::pow(beta_ld, 14);
+    }
+
+    return static_cast<double>(scalar);
+}
+
+
+double EoxCcAll(double mq, int param, double beta) {
+    // de/dx concrete
+    long double mq_ld = static_cast<long double>(mq);
+    long double beta_ld = static_cast<long double>(beta);
+    long double scalar;
+    long double ZCc_eff = 1.0L;
+
+    if (beta_ld <= 0.00226L) {
+        scalar = 30376.62714732753L * beta_ld;
+    } else if (beta_ld >= 0.06181818181818182L) {
+        scalar = static_cast<long double>(Eox(static_cast<double>(mq_ld), static_cast<double>(ZCc_eff), ZoACc, rhoCc, I0Cc, x0Cc, x1Cc, CbarCc, aCc, kCc, d0Cc, static_cast<double>(beta_ld))) * 0.197L;
+    } else {
+        scalar = 0.3717416673986129L + 26377.245398907748L * beta_ld + 2.8807310255188923e6L * std::pow(beta_ld, 2)
+                 - 6.152256215129855e8L * std::pow(beta_ld, 3) + 4.441507306806682e10L * std::pow(beta_ld, 4)
+                 - 1.8750617184047375e12L * std::pow(beta_ld, 5) + 5.310954532975338e13L * std::pow(beta_ld, 6)
+                 - 1.0693146651849746e15L * std::pow(beta_ld, 7) + 1.5707786950520584e16L * std::pow(beta_ld, 8)
+                 - 1.695911162356092e17L * std::pow(beta_ld, 9) + 1.3350858443896056e18L * std::pow(beta_ld, 10)
+                 - 7.470735431733813e18L * std::pow(beta_ld, 11) + 2.819535817843903e19L * std::pow(beta_ld, 12)
+                 - 6.442273849826215e19L * std::pow(beta_ld, 13) + 6.737738168445225e19L * std::pow(beta_ld, 14);
+    }
+
+    return static_cast<double>(scalar);
+}
+
+double EoxRockAll(double mq, int param, double beta) {
+    // de/dx rock
+    long double mq_ld = static_cast<long double>(mq);
+    long double beta_ld = static_cast<long double>(beta);
+    long double scalar;
+    long double ZRock_eff = 1.0L;
+
+    if (beta_ld <= 0.00226L) {
+        scalar = 28340.291807946152L * beta_ld;
+    } else if (beta_ld >= 0.05745454545454545L) {
+        scalar = static_cast<long double>(Eox(static_cast<double>(mq_ld), static_cast<double>(ZRock_eff), ZoARock, rhoRock, I0Rock, x0Rock, x1Rock, CbarRock, aRock, kRock, d0Rock, static_cast<double>(beta_ld))) * 0.197L;
+    } else {
+        scalar = 0.3044358906484703L + 25065.834574193614L * beta_ld + 2.350400267498349e6L * std::pow(beta_ld, 2)
+                 - 4.976688103007817e8L * std::pow(beta_ld, 3) + 3.513441645396524e10L * std::pow(beta_ld, 4)
+                 - 1.462059229558537e12L * std::pow(beta_ld, 5) + 4.113520947417071e13L * std::pow(beta_ld, 6)
+                 - 8.278484331611662e14L * std::pow(beta_ld, 7) + 1.2214854741842604e16L * std::pow(beta_ld, 8)
+                 - 1.3296907090779789e17L * std::pow(beta_ld, 9) + 1.0585274314396489e18L * std::pow(beta_ld, 10)
+                 - 6.003163825933505e18L * std::pow(beta_ld, 11) + 2.30021301170228e19L * std::pow(beta_ld, 12)
+                 - 5.34284980622759e19L * std::pow(beta_ld, 13) + 5.686153048402872e19L * std::pow(beta_ld, 14);
+    }
+
+    return static_cast<double>(scalar);
 }
 
 
@@ -494,24 +548,34 @@ std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * s
 
 std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std::vector<double>& v, const std::vector<double>& vc, const std::vector<double>& s, double vc0, double vp, int loct, int q, const std::vector<double>& r, double dx) {
 //total forces on quirks with gaus de/dex from materials
+     std::cout<<std::setprecision(16);
     double beta = 0.0;
     for (double component : v) {
         beta += component * component;
     }
     beta = std::sqrt(beta);
     // First term: -Lambda^2 / 100 * sqrt(1 - vc0^2) * s
-    std::vector<double> term1 = MultiplyVector(s, -Lambda * Lambda / 100.0 * std::sqrt(1 - vc0 * vc0));
-    //std::cout<<"term1: "<<term1[0]<<", "<<term1[1]<<", "<<term1[2]<<std::endl;
+    long double sqrtTerm1 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
+    std::vector<double> term1 = MultiplyVector(s, -Lambda * Lambda / 100.0 * static_cast<double>(sqrtTerm1));
+    //std::cout << "term1: " << term1[0] << ", " << term1[1] << ", " << term1[2] << std::endl;
+    //std::cout << "term1,s1: " <<s[0]<<"s2: "<<s[1]<<"s3: "<<s[2]<< std::endl;
 
     // Second term: -Lambda^2 / 100 * vp / sqrt(1 - vc0^2) * vc
-    std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / std::sqrt(1 - vc0 * vc0));
-
-//std::cout<<"term2: "<<term2[0]<<", "<<term2[1]<<", "<<term2[2]<<std::endl;
+    long double sqrtTerm2 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
+    std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / static_cast<double>(sqrtTerm2));
+    //std::cout << "term2: " << term2[0] << ", " << term2[1] << ", " << term2[2] << std::endl;
 //std::cout<<"vc: "<<vc[0]<<", "<<vc[1]<<", "<<vc[2]<<std::endl;
 
     // Third term: 0.587 * q * Cross(v, Bct(r[0], r[1], r[2]))
-    std::vector<double> term3 = MultiplyVector(Cross(v, Bct(r[0], r[1], r[2])), 0.587 * q);
-    //std::cout<<"term3: "<<term3[0]<<", "<<term3[1]<<", "<<term3[2]<<std::endl;
+    std::vector<long double> v_long(v.begin(), v.end());
+    std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
+
+    // Use the CrossLong function
+    std::vector<long double> crossProductLong = CrossLong(v_long, bct_long);
+
+    // Multiply the cross product by the scalar
+    std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * static_cast<long double>(q));
+
      
     // Fourth term: based on loct value with Gaussian variation
     double term4;
@@ -541,12 +605,16 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
     //std::cout<<"term4: "<<term4<<std::endl;
     //std::cout<<"beta: "<<beta<<std::endl;
     //term4 = MultiplyVector(Normalize(v), DotProduct(term4, Normalize(v)));
-    std::vector<double> term4vec = MultiplyVector(Normalize(v), term4);
- 
+    std::vector<long double> term4vec = MultiplyVectorLong(NormalizeLong(v), static_cast<long double>(term4));
+    //std::cout<<"normalize vector: "<<term4vec[0]<<", "<<term4vec[1]<<", "<<term4vec[2]<<std::endl;
+     //   std::cout<<"v : "<<v[0]<<", "<<v[1]<<", "<<v[2]<<std::endl;
+   
+  
+   
     // Summing up all terms
-    std::vector<double> force(v.size());
+    std::vector<double> force(3);
     for (size_t i = 0; i < force.size(); ++i) {
-        force[i] = (term1[i] + term2[i] + term3[i] - term4vec[i]) / 6.58;
+        force[i] = (static_cast<double>(term1[i]) + static_cast<double>(term2[i]) + static_cast<double>(term3[i]) -  term4vec[i]) / 6.58;
     }
 
     return force;
@@ -656,7 +724,7 @@ int main(int argc, char* argv[]) {
     for (int h = 0; h <= 0; ++h) {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
-        double front = 19e6; // in micrometers
+       double front = 19e6; // in micrometers
         
         int q1 = 1, q2 = -1;
         double mq = round(data[2 * h][6]); // Quirk mass in GeV
@@ -695,7 +763,7 @@ int main(int argc, char* argv[]) {
         // while (!(((r1[2] > back) && (r2[2] > back)) 
 
         double lastSaveTime = 0;
-        double saveInterval = .1; 
+        double saveInterval = 1; 
 
         double dx1pre = 0.0, dx2pre = 0.0; 
 
@@ -713,13 +781,13 @@ int main(int argc, char* argv[]) {
 
             // Recalculate energies and velocities
             E1 = sqrt(mq * mq + p1[0] * p1[0] + p1[1] * p1[1] + p1[2] * p1[2]);
-            v1 = {p1[0] / E1, p1[1] / E1, p1[2] / E1};
+            v1 = DivideVector(p1,E1);
             v10 = sqrt(v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2]);
 
             
 
             E2 = sqrt(mq * mq + p2[0] * p2[0] + p2[1] * p2[1] + p2[2] * p2[2]);
-            v2 = {p2[0] / E2, p2[1] / E2, p2[2] / E2};
+            v2 = DivideVector(p2,E2);
             v20 = sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
 
 
@@ -814,7 +882,8 @@ int main(int argc, char* argv[]) {
 
         
         //currently breaking here to locate start and source of numerical instability
-         /*if (n==253056){
+        /* if (n==1){
+            std::cout<<"quirk mass: "<<mq<<std::endl;
             std::cout<<std::setprecision(16);
             std::cout<<"F1: "<<F1[0]<<", "<<F1[1]<<", "<<F1[2]<<std::endl;
             std::cout<<"F2: "<<F2[0]<<", "<<F2[1]<<", "<<F2[2]<<std::endl;
@@ -822,7 +891,7 @@ int main(int argc, char* argv[]) {
             std::cout<<"r1: "<<r1[0]<<", "<<r1[1]<<", "<<r1[2]<<std::endl;
             std::cout<<"r2: "<<r2[0]<<", "<<r2[1]<<", "<<r2[2]<<std::endl;
             std::cout<<"E1: "<<E1<<std::endl;
-            std::cout<<"E1: "<<E2<<std::endl;
+            std::cout<<"E2: "<<E2<<std::endl;
             std::cout<<"p1: "<<p1[0]<<", "<<p1[1]<<", "<<p1[2]<<std::endl;
             std::cout<<"p2: "<<p2[0]<<", "<<p2[1]<<", "<<p2[2]<<std::endl;
 
@@ -849,6 +918,7 @@ int main(int argc, char* argv[]) {
             std::cout<<"vc20: "<<vc20<<std::endl;
             std::cout<<"s2: "<<s2[0]<<", "<<s2[1]<<", "<<s2[2]<<std::endl;
             std::cout<<"vc2: "<< vc2[0]<<", "<<vc2[1]<<", "<<vc2[2]<<std::endl;
+            std::cout<<"v1: "<< v1[0]<<", "<<v1[1]<<", "<<v1[2]<<std::endl;
             std::cout<<"v2: "<< v2[0]<<", "<<v2[1]<<", "<<v2[2]<<std::endl;
             std::cout<<"beta: "<<sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2])<<std::endl;
 
