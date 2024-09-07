@@ -7,12 +7,13 @@
 #include <iomanip>
 #include <string>
 #include <chrono>
-#include <boost/random.hpp>
-#include <boost/math/distributions/normal.hpp>
+#include <sstream> 
+#include <stdexcept>
+//#include <boost/random.hpp>
+//#include <boost/math/distributions/normal.hpp>
 #include <filesystem> 
 #include <limits>
 
-//g++ -o quirk_run quirk_run.cxx
 // Constants (based on the Mathematica script)
 const double ZCu = 29;
 const double ZoACu = ZCu / 63.546;
@@ -407,17 +408,26 @@ std::vector<long double> MultiplyVectorLong(const std::vector<long double>& v, l
     return {v[0] * scalar, v[1] * scalar, v[2] * scalar};
 }
 
-//std::vector<double> DivideVector(const std::vector<double>& v, double scalar) {
- //   return {v[0] / scalar, v[1] / scalar, v[2] / scalar};
-//}
-
 std::vector<double> DivideVector(const std::vector<double>& v, double scalar) {
+    long double scalar_long = static_cast<long double>( scalar);
+    std::vector< double> div_v(3);
+    std::vector<long double> div_v_temp(3);
+    for (size_t i = 0; i < v.size(); ++i) {
+        div_v_temp[i] = static_cast<long double>(v[i])/scalar_long;
+        div_v[i] = static_cast<double>(div_v_temp[i]);
+    }
+
+    return {div_v[0], div_v[1], div_v[2]};
+}
+
+
+/*std::vector<double> DivideVector(const std::vector<double>& v, double scalar) {
     if (std::abs(scalar) < std::numeric_limits<double>::epsilon()) {
         scalar = (scalar < 0) ? -std::numeric_limits<double>::epsilon() : std::numeric_limits<double>::epsilon();
     }
     
     return {v[0] / scalar, v[1] / scalar, v[2] / scalar};
-}
+}*/
 
 //double DotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
 //    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
@@ -721,7 +731,7 @@ int main(int argc, char* argv[]) {
         data.push_back(row);
     }
 
-    for (int h = 0; h <= 0; ++h) {
+    for (int h = 1; h <= 1; ++h) {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
        double front = 19e6; // in micrometers
@@ -746,8 +756,29 @@ int main(int argc, char* argv[]) {
         double v20 = sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
 
         std::vector<double> Beta = {(p1[0] + p2[0]) / (E1 + E2), (p1[1] + p2[1]) / (E1 + E2), (p1[2] + p2[2]) / (E1 + E2)};
+        std::vector<long double> p1_long(3);
+        std::vector<long double> p2_long(3);
+        long double E1_long = static_cast<double long>(E1);
+        long double E2_long=static_cast<double long>(E2);
+     
+        for (int i=0;i<p1.size();++i)
+        {
+            p1_long[i]= static_cast<long double> (p1[i]);
+            p2_long[i]= static_cast<long double> (p2[i]);
+            
+        }
 
-        double t1q = 658 * ((2 * mq) / (Lambda * Lambda)) * sqrt(pow((E1 + E2) / (2 * mq), 2) - 1 / (1 - (Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2])));
+        
+        
+        std::vector<long double> Beta_long = {(p1_long[0] + p2_long[0]) / (E1_long + E2_long), (p1_long[1] + p2_long[1]) / (E1_long + E2_long), (p1_long[2] + p2_long[2]) / (E1_long + E2_long)+.0000000000000002};
+        
+        long double mq_long = static_cast<long double >(mq);
+        long double Lambda_long = static_cast<long double >(Lambda);
+
+        long double t1q_long = 658 * ((2 * mq_long) / (Lambda_long * Lambda_long)) * sqrt(pow((E1_long + E2_long) / (2 * mq_long), 2) - 1 / (1 - (Beta_long[0] * Beta_long[0] + Beta_long[1] * Beta_long[1] + Beta_long[2] * Beta_long[2])));
+   
+        double t1q = static_cast<double>(t1q_long);
+
         double dt = std::min(0.03, t1q / 10000);
 
         int nsf = floor(front / (3e5 * t1q * Beta[2]));
@@ -763,7 +794,7 @@ int main(int argc, char* argv[]) {
         // while (!(((r1[2] > back) && (r2[2] > back)) 
 
         double lastSaveTime = 0;
-        double saveInterval = 1; 
+        double saveInterval = .01; //nano seconds
 
         double dx1pre = 0.0, dx2pre = 0.0; 
 
@@ -790,6 +821,7 @@ int main(int argc, char* argv[]) {
             v2 = DivideVector(p2,E2);
             v20 = sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
 
+            
 
 
             Beta = {(p1[0] + p2[0]) / (E1 + E2), (p1[1] + p2[1]) / (E1 + E2), (p1[2] + p2[2]) / (E1 + E2)};
@@ -870,6 +902,7 @@ int main(int argc, char* argv[]) {
             p1 = AddVectors(p1, MultiplyVector(F1, dt1));
             p2 = AddVectors(p2, MultiplyVector(F2, dt2));
 
+
             r1 = AddVectors(r1, MultiplyVector(AddVectors(v1, DivideVector(p1, sqrt(mq * mq + DotProduct(p1, p1)))), 300000.0 * dt1 / 2));
             r2 = AddVectors(r2, MultiplyVector(AddVectors(v2, DivideVector(p2, sqrt(mq * mq + DotProduct(p2, p2)))), 300000.0 * dt2 / 2));
 
@@ -880,51 +913,7 @@ int main(int argc, char* argv[]) {
             int layer1f = Layer(r1[0], r1[1], r1[2]);
             int layer2f = Layer(r2[0], r2[1], r2[2]);
 
-        
-        //currently breaking here to locate start and source of numerical instability
-        /* if (n==1){
-            std::cout<<"quirk mass: "<<mq<<std::endl;
-            std::cout<<std::setprecision(16);
-            std::cout<<"F1: "<<F1[0]<<", "<<F1[1]<<", "<<F1[2]<<std::endl;
-            std::cout<<"F2: "<<F2[0]<<", "<<F2[1]<<", "<<F2[2]<<std::endl;
-            
-            std::cout<<"r1: "<<r1[0]<<", "<<r1[1]<<", "<<r1[2]<<std::endl;
-            std::cout<<"r2: "<<r2[0]<<", "<<r2[1]<<", "<<r2[2]<<std::endl;
-            std::cout<<"E1: "<<E1<<std::endl;
-            std::cout<<"E2: "<<E2<<std::endl;
-            std::cout<<"p1: "<<p1[0]<<", "<<p1[1]<<", "<<p1[2]<<std::endl;
-            std::cout<<"p2: "<<p2[0]<<", "<<p2[1]<<", "<<p2[2]<<std::endl;
-
-            std::cout<<"s1: "<<s1[0]<<", "<<s1[1]<<", "<<s1[2]<<std::endl;
-            std::cout<<"s2: "<<s2[0]<<", "<<s2[1]<<", "<<s2[2]<<std::endl;
-    
-            std::cout<<"n: "<<n<<std::endl;
-
-            std::cout<<"dt1: "<<dt1<<std::endl;
-            std::cout<<"dt2: "<<dt2<<std::endl;
-
-            std::cout<<"t1: "<<t1<<std::endl;
-            std::cout<<"t2: "<<t2<<std::endl;
-
-            std::cout<<"ct1: "<<ct1<<std::endl;
-            std::cout<<"ct2: "<<ct2<<std::endl;
-
-
-            
-            std::cout<<"loct1: "<<loct1<<std::endl;
-            std::cout<<"loct2: "<<loct2<<std::endl;
-            std::cout<<"vp2: "<<vp2<<std::endl;
-            std::cout<<"dx2pre: "<<dx2pre<<std::endl;
-            std::cout<<"vc20: "<<vc20<<std::endl;
-            std::cout<<"s2: "<<s2[0]<<", "<<s2[1]<<", "<<s2[2]<<std::endl;
-            std::cout<<"vc2: "<< vc2[0]<<", "<<vc2[1]<<", "<<vc2[2]<<std::endl;
-            std::cout<<"v1: "<< v1[0]<<", "<<v1[1]<<", "<<v1[2]<<std::endl;
-            std::cout<<"v2: "<< v2[0]<<", "<<v2[1]<<", "<<v2[2]<<std::endl;
-            std::cout<<"beta: "<<sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2])<<std::endl;
-
-             break;
-            }*/
-        //save trajectory info
+       
         if(t1 - lastSaveTime >= saveInterval){
             outputFileTrajectory << std::setprecision(16) <<  t1 << " " << r1[0] << " " << r1[1] << " " << r1[2] << " " << "\n";
             outputFileTrajectory << std::setprecision(16) <<  t1 << " " << r2[0] << " " << r2[1] << " " << r2[2] << " " << "\n";
