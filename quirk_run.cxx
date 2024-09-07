@@ -276,30 +276,29 @@ double EoxRockAll(double mq, int param, double beta) {
 
 
 //FIXME: once validated and random is turned back on, need to pass gen as input variable!
-double EoxGaus(double m, double z, double ZoA, double rho, double I0, double x0, double x1, double Cbar, double a, double k, double d0, double beta, double delta_x, std::function<double(double, int, double)> EoxAllFunc) {
+double EoxGaus(double m, double z, double ZoA, double rho, double I0, double x0, double x1, double Cbar, double a, double k, double d0, double beta, double delta_x, std::function<double(double, int, double)> EoxAllFunc,std::mt19937& gen) {
     // de/dx gaus 
     double z_eff =1;
     double mean = EoxAllFunc(m, z_eff, beta);
     double std_dev = 0.197 * sqrt(Xi(z_eff, ZoA, rho, beta) * delta_x * Emax(m, beta) * (1 - beta * beta / 2)) / delta_x;
     std::normal_distribution<> d(mean, std_dev); 
-    return 1.0; //FIXME: temporary
-
-    //return d(gen); 
+    std::cout<<(d(gen))<<std::endl;
+    return d(gen); 
     //return truncated_normal(mean, std_dev); //for truncated distributions
 }
 
 
 // de/dx gausfor different materials
-double EoxCuGaus(double mq, int param, const double beta, double dx) {
-    return EoxGaus(mq, ZCu, ZoACu, rhoCu, I0Cu, x0Cu, x1Cu, CbarCu, aCu, kCu, d0Cu, beta, dx, EoxCuAll);
+double EoxCuGaus(double mq, int param, const double beta, double dx,std::mt19937& gen) {
+    return EoxGaus(mq, ZCu, ZoACu, rhoCu, I0Cu, x0Cu, x1Cu, CbarCu, aCu, kCu, d0Cu, beta, dx, EoxCuAll,gen);
 }
 
-double EoxCcGaus(double mq, int param, const double beta, double dx) {
-    return EoxGaus(mq, ZCc, ZoACc, rhoCc, I0Cc, x0Cc, x1Cc, CbarCc, aCc, kCc, d0Cc, beta, dx, EoxCcAll);
+double EoxCcGaus(double mq, int param, const double beta, double dx,std::mt19937& gen) {
+    return EoxGaus(mq, ZCc, ZoACc, rhoCc, I0Cc, x0Cc, x1Cc, CbarCc, aCc, kCc, d0Cc, beta, dx, EoxCcAll,gen);
 }
 
-double EoxRockGaus(double mq, int param, const double beta, double dx) {
-    return EoxGaus(mq, ZRock, ZoARock, rhoRock, I0Rock, x0Rock, x1Rock, CbarRock, aRock, kRock, d0Rock, beta, dx, EoxRockAll);
+double EoxRockGaus(double mq, int param, const double beta, double dx,std::mt19937& gen) {
+    return EoxGaus(mq, ZRock, ZoARock, rhoRock, I0Rock, x0Rock, x1Rock, CbarRock, aRock, kRock, d0Rock, beta, dx, EoxRockAll,gen);
 }
 
 std::vector<double> EoxCu(double mq, int param, const std::vector<double>& v) {
@@ -556,7 +555,7 @@ std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * s
 }
 
 
-std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std::vector<double>& v, const std::vector<double>& vc, const std::vector<double>& s, double vc0, double vp, int loct, int q, const std::vector<double>& r, double dx) {
+std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std::vector<double>& v, const std::vector<double>& vc, const std::vector<double>& s, double vc0, double vp, int loct, int q, const std::vector<double>& r, double dx,std::mt19937& gen) {
 //total forces on quirks with gaus de/dex from materials
      std::cout<<std::setprecision(16);
     double beta = 0.0;
@@ -594,19 +593,19 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
             term4 = 0.0;
             break;
         case 1:
-            term4 = EoxCuGaus(mq, 1, beta, dx);
+            term4 = EoxCuGaus(mq, 1, beta, dx,gen);
             
             break;
         case 2:
-            term4 = EoxCuGaus(mq, 1, beta, dx);
+            term4 = EoxCuGaus(mq, 1, beta, dx,gen);
          
             break;
         case 3:
-           term4 = EoxCcGaus(mq, 1, beta, dx);
+           term4 = EoxCcGaus(mq, 1, beta, dx,gen);
        
             break;
         case 4:
-            term4 = EoxRockGaus(mq, 1, beta, dx);
+            term4 = EoxRockGaus(mq, 1, beta, dx,gen);
         
             break;
         default:
@@ -880,8 +879,8 @@ int main(int argc, char* argv[]) {
             }
          
             // Recalculate forces using normally distributed de/dx
-            std::vector<double> F1 = CalculateForcesWithGaus(mq, Lambda, v1, vc1, s1, vc10, vp1, loct1, q1, r1, dx1pre);
-            std::vector<double> F2 = CalculateForcesWithGaus(mq, Lambda, v2, vc2, s2, vc20, vp2, loct2, q2, r2, dx2pre);
+            std::vector<double> F1 = CalculateForcesWithGaus(mq, Lambda, v1, vc1, s1, vc10, vp1, loct1, q1, r1, dx1pre,gen);
+            std::vector<double> F2 = CalculateForcesWithGaus(mq, Lambda, v2, vc2, s2, vc20, vp2, loct2, q2, r2, dx2pre,gen);
        
 
             double ct1 = CalculateCt(v1, Beta, r1, r2, F1, E1, E2);
