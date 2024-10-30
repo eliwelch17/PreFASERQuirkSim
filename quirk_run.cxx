@@ -9,10 +9,15 @@
 #include <chrono>
 #include <sstream> 
 #include <stdexcept>
-//#include <boost/random.hpp>
-//#include <boost/math/distributions/normal.hpp>
 #include <filesystem> 
 #include <limits>
+#include <unordered_map>
+#include <tuple>
+#include <functional>  
+#include <utility>
+#include <sys/stat.h>
+#include <filesystem>
+#include "include/KDTree3D.h"
 
 // Constants (based on the Mathematica script)
 const double ZCu = 29;
@@ -25,6 +30,7 @@ const double x0Cu = -0.0254;
 const double x1Cu = 3.2792;
 const double CbarCu = 4.4190;
 const double d0Cu = 0.08;
+
 
 const double ZCc = 8.56;
 const double ZoACc = ZCc / 40.04;
@@ -51,8 +57,159 @@ const double d0Rock = 0.00;
 
 using namespace std;
 
-std::vector<double> Cross(const std::vector<double>& v1, const std::vector<double>& v2) {
 
+
+
+//-------------- magnetic field stuff ---------------------
+
+// Structure to represent a 3D point with force components
+
+// Forward declare KDTree3D to avoid raw pointer issues
+class KDTree3D;
+
+struct Magnet {
+    std::vector<Point> points; // Holds coordinates and force values
+    std::unique_ptr<KDTree3D> kd_tree;  // Unique pointer to KDTree3D for automatic cleanup
+
+    Magnet(const std::vector<Point>& pts);
+    double x_min, x_max, y_min, y_max, z_min, z_max;  // Bounds for each magnet
+};
+
+// Constructor initializes the KD-tree and sets min/max bounds
+Magnet::Magnet(const std::vector<Point>& pts) : points(pts), kd_tree(nullptr) {
+    if (!points.empty()) {
+        x_min = x_max = points[0].x;
+        y_min = y_max = points[0].y;
+        z_min = z_max = points[0].z;
+        for (const auto& pt : points) {
+            x_min = std::min(x_min, pt.x);
+            x_max = std::max(x_max, pt.x);
+            y_min = std::min(y_min, pt.y);
+            y_max = std::max(y_max, pt.y);
+            z_min = std::min(z_min, pt.z);
+            z_max = std::max(z_max, pt.z);
+        }
+    }
+    // Initialize the KD-tree using points
+    kd_tree = std::make_unique<KDTree3D>(points); 
+}
+
+std::vector<Magnet> all_magnets;
+
+bool load_csv(const std::string& filepath, std::vector<Point>& points) {
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << filepath << "\n";
+        return false;
+    }
+
+    std::string line;
+    if (!std::getline(file, line)) { // Skip header line
+        std::cerr << "Empty file: " << filepath << "\n";
+        return false;
+    }
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string item;
+        std::vector<double> row;
+
+        while (std::getline(ss, item, ',')) {
+            row.push_back(std::stod(item));
+        }
+
+        if (row.size() < 6) continue; // Ensure at least 6 values
+        // Create a Point and add to points vector
+        points.emplace_back(
+            row[0] * 1e6,  // x (converted to micrometers)
+            row[1] * 1e6,  // y (converted to micrometers)
+            row[2] * 1e6,  // z (converted to micrometers)
+            row[3],        // Fx
+            row[4],        // Fy
+            row[5]         // Fz
+        );
+    }
+
+    file.close();
+    return !points.empty();
+}
+
+std::vector<long double> BctAdv(const std::vector<Magnet>& magnets, double x, double y, double z) {
+    for (const auto& magnet : magnets) {
+        if (x < magnet.x_min || x > magnet.x_max ||
+            y < magnet.y_min || y > magnet.y_max ||
+            z < magnet.z_min || z > magnet.z_max) {
+            continue;
+        }
+        // Perform the KD-tree nearest-neighbor search
+        Point nearest = magnet.kd_tree->find_closest_point(x, y, z);
+
+         // Debugging KD-tree
+        /*std::cout << std::fixed << std::setprecision(5);  
+        std::cout << "Input Coordinates: (" << x << ", " << y << ", " << z << ")\n";
+        std::cout << "Closest Point Found: (" << nearest.x << ", " << nearest.y << ", " << nearest.z << ")\n";
+        std::cout << "Force at Closest Point: Fx = " << nearest.Fx
+                  << ", Fy = " << nearest.Fy
+                  << ", Fz = " << nearest.Fz << "\n";
+        std::cout << "----------------------" << std::endl;*/
+        return {static_cast<long double>(nearest.Fx),
+                static_cast<long double>(nearest.Fy),
+                static_cast<long double>(nearest.Fz)};
+    }
+
+    // If no magnet contains the point, return a default zero vector
+    return {0.0L, 0.0L, 0.0L};
+}
+
+
+
+
+void initializeFieldMaps() {
+    std::cout << "Initializing magnetic fields...\n";
+
+    std::string export_dir = "./ExportedMagneticFields";
+    std::vector<std::string> magnet_types = {"MB","D1","D2","MQAB2","MQX"};
+
+    for (const auto& magnet_type : magnet_types) {
+        std::string type_dir = export_dir + "/" + magnet_type;
+
+        size_t file_count = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(type_dir)) {
+            if (entry.path().extension() == ".csv") {
+                file_count++;
+            }
+        }
+
+        size_t magnet_idx = 1;
+        while (magnet_idx <= file_count) {
+            std::stringstream ss;
+            ss << type_dir << "/" << magnet_type << "_magnet_" << magnet_idx << ".csv";
+            std::string filepath = ss.str();
+
+            if (!std::filesystem::exists(filepath)) {
+                std::cerr << "File does not exist: " << filepath << "\n";
+                break;
+            }
+
+            std::vector<Point> points;
+            if (load_csv(filepath, points)) {
+                Magnet magnet(points);
+                all_magnets.push_back(std::move(magnet));
+                std::cout << "Successfully loaded and initialized KD-tree for " << filepath << "\n";
+            } else {
+                std::cerr << "Failed to load " << filepath << "\n";
+            }
+
+            magnet_idx++;
+        }
+    }
+}
+
+
+
+
+//-------------------- dE/dx funcitons ---------------------
+std::vector<double> Cross(const std::vector<double>& v1, const std::vector<double>& v2) {
     //cross product function
     if (v1.size() != 3 || v2.size() != 3) {
         throw std::invalid_argument("Both vectors must be 3-dimensional");
@@ -77,6 +234,9 @@ std::vector<long double> CrossLong(const std::vector<long double>& v1, const std
     result[2] = v1[0] * v2[1] - v1[1] * v2[0];
     return result;
 }
+
+
+
 
 
 double Gamma(double beta) {
@@ -108,80 +268,6 @@ double Eox(double m, double z, double ZoA, double rho, double I0, double x0, dou
            - beta * beta - Delta(log10(beta * Gamma(beta)), x0, x1, Cbar, a, k, d0) / 2);
          
 }
-
-
-/*double EoxCuAll(double mq, int param, double beta) {
-   
-
-    // Determine the scalar value based on the magnitude
-    double scalar;
-    double ZCu_eff=1;
-    if (beta <= 0.00226) {
-        scalar = 37597.30061169589 * beta;
-    } else if (beta >= 0.06345454545454546) {
-        scalar = Eox(mq, ZCu_eff, ZoACu, rhoCu, I0Cu, x0Cu, x1Cu, CbarCu, aCu, kCu, d0Cu, beta) * 0.197;
-      
-    } else {
-        scalar = 0.34289008715835223 + 33909.5576744394 * beta + 2.6438521703577857e6 * std::pow(beta, 2)
-                 - 5.582148886272709e8 * std::pow(beta, 3) + 3.916027090833348e10 * std::pow(beta, 4)
-                 - 1.6320734910018296e12 * std::pow(beta, 5) + 4.608165819030902e13 * std::pow(beta, 6)
-                 - 9.294312877895761e14 * std::pow(beta, 7) + 1.370510669479835e16 * std::pow(beta, 8)
-                 - 1.486143034696763e17 * std::pow(beta, 9) + 1.174756123051605e18 * std::pow(beta, 10)
-                 - 6.596425471576249e18 * std::pow(beta, 11) + 2.496247979943447e19 * std::pow(beta, 12)
-                 - 5.714216718459019e19 * std::pow(beta, 13) + 5.982648430710585e19 * std::pow(beta, 14);
-    }
-
-    // Return a vector where each component is the same scalar value
-    
-    return scalar;
-}
-
-
-double EoxCcAll(double mq, int param, double beta) {
- //de/dx concrete
-    double scalar;
-    double ZCc_eff=1;
-    if (beta <= 0.00226) {
-        scalar = 30376.62714732753 * beta;
-    } else if (beta >= 0.06181818181818182) {
-        scalar = Eox(mq, ZCc_eff=1, ZoACc, rhoCc, I0Cc, x0Cc, x1Cc, CbarCc, aCc, kCc, d0Cc, beta) * 0.197;
-    } else {
-        scalar = 0.3717416673986129 + 26377.245398907748 * beta + 2.8807310255188923e6 * std::pow(beta, 2)
-                 - 6.152256215129855e8 * std::pow(beta, 3) + 4.441507306806682e10 * std::pow(beta, 4)
-                 - 1.8750617184047375e12 * std::pow(beta, 5) + 5.310954532975338e13 * std::pow(beta, 6)
-                 - 1.0693146651849746e15 * std::pow(beta, 7) + 1.5707786950520584e16 * std::pow(beta, 8)
-                 - 1.695911162356092e17 * std::pow(beta, 9) + 1.3350858443896056e18 * std::pow(beta, 10)
-                 - 7.470735431733813e18 * std::pow(beta, 11) + 2.819535817843903e19 * std::pow(beta, 12)
-                 - 6.442273849826215e19 * std::pow(beta, 13) + 6.737738168445225e19 * std::pow(beta, 14);
-    }
-
-    return scalar;
-}
-
-double EoxRockAll(double mq, int param, double beta) {
-   //de/dx rock
-    double scalar;
-    double ZRock_eff=1;
-    if (beta <= 0.00226) {
-        scalar = 28340.291807946152 * beta;
-    } else if (beta >= 0.05745454545454545) {
-        scalar = Eox(mq, ZRock_eff, ZoARock, rhoRock, I0Rock, x0Rock, x1Rock, CbarRock, aRock, kRock, d0Rock, beta) * 0.197;
-    } else {
-        scalar = 0.3044358906484703 + 25065.834574193614 * beta + 2.350400267498349e6 * std::pow(beta, 2)
-                 - 4.976688103007817e8 * std::pow(beta, 3) + 3.513441645396524e10 * std::pow(beta, 4)
-                 - 1.462059229558537e12 * std::pow(beta, 5) + 4.113520947417071e13 * std::pow(beta, 6)
-                 - 8.278484331611662e14 * std::pow(beta, 7) + 1.2214854741842604e16 * std::pow(beta, 8)
-                 - 1.3296907090779789e17 * std::pow(beta, 9) + 1.0585274314396489e18 * std::pow(beta, 10)
-                 - 6.003163825933505e18 * std::pow(beta, 11) + 2.30021301170228e19 * std::pow(beta, 12)
-                 - 5.34284980622759e19 * std::pow(beta, 13) + 5.686153048402872e19 * std::pow(beta, 14);
-    }
-    return scalar;
-}*/
-
-
-
-
-
 
 double EoxCuAll(double mq, int param, double beta) {
     //de/dx copper
@@ -282,7 +368,7 @@ double EoxGaus(double m, double z, double ZoA, double rho, double I0, double x0,
     double mean = EoxAllFunc(m, z_eff, beta);
     double std_dev = 0.197 * sqrt(Xi(z_eff, ZoA, rho, beta) * delta_x * Emax(m, beta) * (1 - beta * beta / 2)) / delta_x;
     std::normal_distribution<> d(mean, std_dev); 
-    std::cout<<(d(gen))<<std::endl;
+
     return d(gen); 
     //return truncated_normal(mean, std_dev); //for truncated distributions
 }
@@ -350,6 +436,7 @@ std::vector<double> Bct(double x, double y, double z) {
 
 std::vector<long double> BctLong(long double x, long double y, long double z) {
     //B long function
+
     if (((std::sqrt(x * x + y * y) < 0.06e6L) && (std::abs(z - 72.287e6L) < 12.365e6L)) ||
         ((((std::sqrt((x - 0.093e6L) * (x - 0.093e6L) + y * y) < 0.04e6L) || 
            (std::sqrt((x + 0.093e6L) * (x + 0.093e6L) + y * y) < 0.04e6L)) && 
@@ -370,6 +457,7 @@ std::vector<long double> BctLong(long double x, long double y, long double z) {
 
 
 
+
 int Layer(double x, double y, double z) {
     //determine scintilaltor layers
     if (abs(x) < 0.15e6 && abs(y) < 0.15e6 && abs(z - 480.01e6) < 0.01e6) return 1;
@@ -383,9 +471,6 @@ std::vector<double> SubtractVectors(const std::vector<double>& v1, const std::ve
     return {v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2]};
 }
 
-//std::vector<double> AddVectors(const std::vector<double>& v1, const std::vector<double>& v2) {
- //   return {v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]};
-//}
 
 std::vector<double> AddVectors(const std::vector<double>& v1, const std::vector<double>& v2) {
     std::vector<double> result(3);
@@ -418,19 +503,6 @@ std::vector<double> DivideVector(const std::vector<double>& v, double scalar) {
 
     return {div_v[0], div_v[1], div_v[2]};
 }
-
-
-/*std::vector<double> DivideVector(const std::vector<double>& v, double scalar) {
-    if (std::abs(scalar) < std::numeric_limits<double>::epsilon()) {
-        scalar = (scalar < 0) ? -std::numeric_limits<double>::epsilon() : std::numeric_limits<double>::epsilon();
-    }
-    
-    return {v[0] / scalar, v[1] / scalar, v[2] / scalar};
-}*/
-
-//double DotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
-//    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
-//}
 
 double DotProduct(const std::vector<double>& v1, const std::vector<double>& v2) {
     //employ Kahan Summation method
@@ -471,7 +543,6 @@ double CalculateDistance(const std::vector<double>& v, const std::vector<double>
 }
 
 
-
 std::vector<double> CalculateForces(double mq, double Lambda, const std::vector<double>& v, const std::vector<double>& vc, const std::vector<double>& s, double vc0, double vp, int loct, int q, const std::vector<double>& r) {
 //total forces on quirks
     
@@ -498,24 +569,13 @@ std::vector<long double> term2 = MultiplyVectorLong(vc_long, term2_factor);
 
 // Second term: -Lambda^2 / 100 * vp / sqrt(1 - vc0^2) * vc
 
-//std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / std::sqrt(1 - vc0 * vc0));
-//std::cout<<"term2: "<<term2[0]<<", "<<term2[1]<<", "<<term2[2]<<std::endl;
-// std::cout<<"vc: "<<vc[0]<<", "<<vc[1]<<", "<<vc[2]<<std::endl;
-//std::cout<<"vp: "<<vp<<std::endl;
-// Third term: 0.587 * q * Cross(v, Bct(r[0], r[1], r[2]))
-// Convert the cross product to std::vector<long double>
 std::vector<long double> v_long(v.begin(), v.end());
-std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
 
-// Use the CrossLong function
+//std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
+std::vector<long double> bct_long = BctAdv(all_magnets,r[0], r[1], r[2]);
 std::vector<long double> crossProductLong = CrossLong(v_long, bct_long);
-
-// Multiply the cross product by the scalar
 std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * static_cast<long double>(q));
 
-
-//std::vector<double> term3 = MultiplyVector(Cross(v, Bct(r[0], r[1], r[2])), 0.587 * q);
-    //std::cout<<"term3: "<<term3[0]<<", "<<term3[1]<<", "<<term3[2]<<std::endl;
 // Fourth term: based on loct value
     double term4;
     switch (loct) {
@@ -538,12 +598,8 @@ std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * s
         default:
             throw std::invalid_argument("Invalid loct value");
     }
-    //term4 = MultiplyVector(Normalize(v), DotProduct(term4, Normalize(v)));
+
     std::vector<long double> term4vec = MultiplyVectorLong(NormalizeLong(v), static_cast<long double>(term4));
-    //std::cout<<"normalize vector: "<<term4vec[0]<<", "<<term4vec[1]<<", "<<term4vec[2]<<std::endl;
-     //   std::cout<<"v : "<<v[0]<<", "<<v[1]<<", "<<v[2]<<std::endl;
-   
-  
    
     // Summing up all terms
     std::vector<double> force(3);
@@ -566,26 +622,19 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
     // First term: -Lambda^2 / 100 * sqrt(1 - vc0^2) * s
     long double sqrtTerm1 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
     std::vector<double> term1 = MultiplyVector(s, -Lambda * Lambda / 100.0 * static_cast<double>(sqrtTerm1));
-    //std::cout << "term1: " << term1[0] << ", " << term1[1] << ", " << term1[2] << std::endl;
-    //std::cout << "term1,s1: " <<s[0]<<"s2: "<<s[1]<<"s3: "<<s[2]<< std::endl;
 
     // Second term: -Lambda^2 / 100 * vp / sqrt(1 - vc0^2) * vc
     long double sqrtTerm2 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
     std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / static_cast<double>(sqrtTerm2));
-    //std::cout << "term2: " << term2[0] << ", " << term2[1] << ", " << term2[2] << std::endl;
-//std::cout<<"vc: "<<vc[0]<<", "<<vc[1]<<", "<<vc[2]<<std::endl;
 
     // Third term: 0.587 * q * Cross(v, Bct(r[0], r[1], r[2]))
     std::vector<long double> v_long(v.begin(), v.end());
-    std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
+    std::vector<long double> bct_long = BctAdv(all_magnets,r[0], r[1], r[2]);
+    //std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
 
-    // Use the CrossLong function
     std::vector<long double> crossProductLong = CrossLong(v_long, bct_long);
-
-    // Multiply the cross product by the scalar
     std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * static_cast<long double>(q));
 
-     
     // Fourth term: based on loct value with Gaussian variation
     double term4;
     switch (loct) {
@@ -611,15 +660,8 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
         default:
             throw std::invalid_argument("Invalid loct value");
     }
-    //std::cout<<"term4: "<<term4<<std::endl;
-    //std::cout<<"beta: "<<beta<<std::endl;
-    //term4 = MultiplyVector(Normalize(v), DotProduct(term4, Normalize(v)));
+   
     std::vector<long double> term4vec = MultiplyVectorLong(NormalizeLong(v), static_cast<long double>(term4));
-    //std::cout<<"normalize vector: "<<term4vec[0]<<", "<<term4vec[1]<<", "<<term4vec[2]<<std::endl;
-     //   std::cout<<"v : "<<v[0]<<", "<<v[1]<<", "<<v[2]<<std::endl;
-   
-  
-   
     // Summing up all terms
     std::vector<double> force(3);
     for (size_t i = 0; i < force.size(); ++i) {
@@ -629,12 +671,31 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
     return force;
 }
 
+
+
+
+
+//##############################################################################################################################
+//
+//
+//
+//Main function
+//
+//
+//
+//##############################################################################################################################
+
 int main(int argc, char* argv[]) {
 
+    initializeFieldMaps();
+  
     double back = 50e6; // Default back value in micrometers
     double Lambda = 500.0; //Default lambda value in eV
     std::string inputFileName;
-    int seed = 0;
+    int seed = 0;     //random seed
+    int nquirks = -1; // number of quirks to simulate
+    int divStep = 10000; //not number of steps, step size is proportioal to Lambda squared/stepDen
+    bool traj = false; //trajectory output flag
 
 
     for (int i = 1; i < argc; ++i) {
@@ -643,12 +704,20 @@ int main(int argc, char* argv[]) {
             back = 1e6*std::atof(argv[++i]); 
         } else if (arg == "-l" && i + 1 < argc) {
             Lambda = std::atof(argv[++i]);
-         } else if (arg == "-s" && i + 1 < argc) {
-            seed = std::atoi(argv[++i]); 
+         } else if (arg == "-n" && i + 1 < argc) {
+            nquirks = std::atof(argv[++i]);
+         }else if (arg == "-s" && i + 1 < argc) {
+            seed = std::atoi(argv[++i]);
+         }else if (arg == "-t" && i + 1 < argc) {
+            traj = true;
+        }else if (arg == "-d" && i + 1 < argc) {
+            divStep = std::atoi(argv[++i]); 
         } else if (arg[0] != '-') {
             inputFileName = arg; 
-        } else {
+        } 
+        else {
             std::cerr << "Unknown option: " << arg << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>" << std::endl;
             return 1;
         }
     }
@@ -656,13 +725,13 @@ int main(int argc, char* argv[]) {
      std::mt19937 gen(seed); //initialize RNG with seed
 
      if (inputFileName.empty()) {
-        std::cerr << "Usage: " << argv[0] << " [-b back_value] [-l lambda_value] [-s seed]<input file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>" << std::endl;
         return 1;
     }
    
     std::filesystem::path inputPath(inputFileName);
-     std::ifstream inputFile(inputFileName);
-     std::string stem = inputPath.stem().string();
+    std::ifstream inputFile(inputFileName);
+    std::string stem = inputPath.stem().string();
 
      // format Lambda without trailing zeros
     std::ostringstream lambdaStream;
@@ -695,25 +764,38 @@ int main(int argc, char* argv[]) {
     }
 
     //output file name for quirks
-    std::string outputFileName = stem + "_" + lambdaStr +"eV.txt";
+    std::string outputFileName = stem + "_" + lambdaStr + "eV" + "_" + std::to_string(seed) + ".txt";
     std::ofstream outputFile(outputFileName);
 
-     //output file name for quirk trajectory
-    std::string outputFileTrajectoryName = stem + "_" + lambdaStr +"eV_trajectory.txt";
-    std::ofstream outputFileTrajectory(outputFileTrajectoryName );
 
+    std::unique_ptr<std::ofstream> outputFileTrajectory;
+    if (traj) {
+    // Output file name for quirk trajectory
+    std::string outputFileTrajectoryName = stem + "_" + lambdaStr + "eV_trajectory.txt";
+    outputFileTrajectory = std::make_unique<std::ofstream>(outputFileTrajectoryName);
+    }
 
-  
 
     if (!inputFile.is_open() || !outputFile.is_open()) {
         std::cerr << "Error opening files!" << std::endl;
         return 1;
     }
 
+    
 
- std::cout << "Running pre-FASER quirk simulation with the following paramters: " << std::endl;
+    std::cout<<"*****************************************************"<<std::endl;
+    std::cout << "Running pre-FASER quirk simulation with the following paramters: " << std::endl;
     std::cout << "Final distance: " << back/(1.0e6) <<"m"<< std::endl;
     std::cout << "Lambda: " << Lambda <<"eV"<< std::endl;
+    if (nquirks == -1)
+    {
+        std::cout << "Number of quirks: All" << std::endl;
+    }
+    else 
+    {
+        std::cout << "Number of quirks: " << nquirks << std::endl;
+    }
+    std::cout<<"*****************************************************"<<std::endl;
    
 
 
@@ -730,7 +812,13 @@ int main(int argc, char* argv[]) {
         data.push_back(row);
     }
 
-    for (int h = 1; h <= 1; ++h) {
+    if (nquirks == -1) {
+        nquirks = data.size() / 2;
+    }
+    
+
+    //Loop over quirks in file
+    for (int h = 1; h <= nquirks; ++h) {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
        double front = 19e6; // in micrometers
@@ -778,37 +866,31 @@ int main(int argc, char* argv[]) {
    
         double t1q = static_cast<double>(t1q_long);
 
-        double dt = std::min(0.03, t1q / 10000);
+        double dt = std::min(0.03, t1q / divStep);
 
         int nsf = floor(front / (3e5 * t1q * Beta[2]));
         int ns = (nsf % 2 == 0) ? nsf : nsf - 1;
         double t1 = ns * t1q;
         double t2 = t1;
-
         std::vector<double> r1 = {3e5 * ns * t1q * Beta[0], 3e5 * ns * t1q * Beta[1], 3e5 * ns * t1q * Beta[2]};
         std::vector<double> r2 = r1;
-
         int stepcount = 0;
         int n = 1;
-        // while (!(((r1[2] > back) && (r2[2] > back)) 
-
         double lastSaveTime = 0;
         double saveInterval = .01; //nano seconds
-
         double dx1pre = 0.0, dx2pre = 0.0; 
 
-        while (!( (sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < 0.01))) {
+        //main step loop
+        while (!( (sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < 0.01) || 
+         (sqrt(r1[0] * r1[0] + r1[1] * r1[1]) > 1e6))) { //if quirk goes a meter off beamline, or too slow cancel event
+
             int loct1 = Loct(r1[0], r1[1], r1[2]);
             int loct2 = Loct(r2[0], r2[1], r2[2]);
 
-           
-
-            int layer1i = Layer(r1[0], r1[1], r1[2]);
-            int layer2i = Layer(r2[0], r2[1], r2[2]);
-
+            //int layer1i = Layer(r1[0], r1[1], r1[2]);
+            //int layer2i = Layer(r2[0], r2[1], r2[2]);
             stepcount++;
             
-
             // Recalculate energies and velocities
             E1 = sqrt(mq * mq + p1[0] * p1[0] + p1[1] * p1[1] + p1[2] * p1[2]);
             v1 = DivideVector(p1,E1);
@@ -819,9 +901,6 @@ int main(int argc, char* argv[]) {
             E2 = sqrt(mq * mq + p2[0] * p2[0] + p2[1] * p2[1] + p2[2] * p2[2]);
             v2 = DivideVector(p2,E2);
             v20 = sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]);
-
-            
-
 
             Beta = {(p1[0] + p2[0]) / (E1 + E2), (p1[1] + p2[1]) / (E1 + E2), (p1[2] + p2[2]) / (E1 + E2)};
 
@@ -856,8 +935,6 @@ int main(int argc, char* argv[]) {
                 std::vector<double> F1pre = CalculateForces(mq, Lambda, v1, vc1, s1, vc10, vp1, loct1, q1, r1);
                 std::vector<double> F2pre = CalculateForces(mq, Lambda, v2, vc2, s2, vc20, vp2, loct2, q2, r2);
 
-             
-
                 double ct1pre = CalculateCt(v1, Beta, r1, r2, F1pre, E1, E2);
                 double ct2pre = CalculateCt(v2, Beta, r2, r1, F2pre, E1, E2);
 
@@ -869,7 +946,6 @@ int main(int argc, char* argv[]) {
                     dt2pre = dt;
                     dt1pre = dt2pre * ct2pre / ct1pre;
                 }
-
 
                 std::vector<double> p1pre = AddVectors(p1, MultiplyVector(F1pre, dt1pre));
                 std::vector<double> p2pre = AddVectors(p2, MultiplyVector(F2pre, dt2pre));
@@ -908,22 +984,24 @@ int main(int argc, char* argv[]) {
             t1 += dt1;
             t2 += dt2;
 
-            // Determine the detector scintillators
-            int layer1f = Layer(r1[0], r1[1], r1[2]);
-            int layer2f = Layer(r2[0], r2[1], r2[2]);
+            // Determine the detector scintillators, currently not used
+            //int layer1f = Layer(r1[0], r1[1], r1[2]);
+            //int layer2f = Layer(r2[0], r2[1], r2[2]);
 
-       
-        if(t1 - lastSaveTime >= saveInterval){
-            outputFileTrajectory << std::setprecision(16) <<  t1 << " " << r1[0] << " " << r1[1] << " " << r1[2] << " " << "\n";
-            outputFileTrajectory << std::setprecision(16) <<  t1 << " " << r2[0] << " " << r2[1] << " " << r2[2] << " " << "\n";
-            lastSaveTime = t1;
+
+        //write trajectory info to file
+        if (traj && outputFileTrajectory && outputFileTrajectory->is_open()) {
+            if (t1 - lastSaveTime >= saveInterval) {
+                *outputFileTrajectory << std::setprecision(16) << t1 << " " << r1[0] << " " << r1[1] << " " << r1[2] << " " << "\n";
+                *outputFileTrajectory << std::setprecision(16) << t1 << " " << r2[0] << " " << r2[1] << " " << r2[2] << " " << "\n";
+                lastSaveTime = t1;
+            }
         }
 
-     if (stepcount%1000000==0){
-  
-        std::cout<<"z1: "<<r1[2]<<std::endl;
-         std::cout<<"beta: "<<sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2])<<std::endl;
 
+     if (stepcount%1000000==0){
+        std::cout<<"z1: "<<r1[2]<<std::endl;
+        std::cout<<"beta: "<<sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2])<<std::endl;
      }
 
 
@@ -953,7 +1031,12 @@ int main(int argc, char* argv[]) {
 
     inputFile.close();
     outputFile.close();
-    outputFileTrajectory.close();
+
+    if (traj && outputFileTrajectory) {
+    outputFileTrajectory->close();
+    }
+
+    
 
     return 0;
 }
