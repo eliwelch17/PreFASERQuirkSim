@@ -818,8 +818,15 @@ int main(int argc, char* argv[]) {
         data.push_back(row);
     }
 
+
+    nquirks +=skip;
     if (nquirks == -1) {
         nquirks = data.size() / 2;
+    }
+    
+    if (nquirks > data.size()/2)//ensure we dont try to sim more quirks than in file
+    {
+        nquirks=data.size()/2;
     }
     
 
