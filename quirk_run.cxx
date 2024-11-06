@@ -696,6 +696,8 @@ int main(int argc, char* argv[]) {
     int nquirks = -1; // number of quirks to simulate
     int divStep = 10000; //not number of steps, step size is proportioal to Lambda squared/stepDen
     bool traj = false; //trajectory output flag
+    int skip=0;
+    int runNum=0;
 
 
     for (int i = 1; i < argc; ++i) {
@@ -704,7 +706,11 @@ int main(int argc, char* argv[]) {
             back = 1e6*std::atof(argv[++i]); 
         } else if (arg == "-l" && i + 1 < argc) {
             Lambda = std::atof(argv[++i]);
-         } else if (arg == "-n" && i + 1 < argc) {
+         }else if (arg == "-skip" && i + 1 < argc) {
+            skip = std::atof(argv[++i]);
+         } else if (arg == "-r" && i + 1 < argc) {
+            runNum = std::atof(argv[++i]);
+         }else if (arg == "-n" && i + 1 < argc) {
             nquirks = std::atof(argv[++i]);
          }else if (arg == "-s" && i + 1 < argc) {
             seed = std::atoi(argv[++i]);
@@ -717,7 +723,7 @@ int main(int argc, char* argv[]) {
         } 
         else {
             std::cerr << "Unknown option: " << arg << std::endl;
-            std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-skip <# events to skip>] [-runNum <run number>] [-t (trajectory output flag)] <input file>" << std::endl;
             return 1;
         }
     }
@@ -725,7 +731,7 @@ int main(int argc, char* argv[]) {
      std::mt19937 gen(seed); //initialize RNG with seed
 
      if (inputFileName.empty()) {
-        std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-skip <# events to skip>] [-runNum <run number>] [-t (trajectory output flag)] <input file>" << std::endl;
         return 1;
     }
    
@@ -764,7 +770,7 @@ int main(int argc, char* argv[]) {
     }
 
     //output file name for quirks
-    std::string outputFileName = stem + "_" + lambdaStr + "eV" + "_" + std::to_string(seed) + ".txt";
+    std::string outputFileName = stem + "_" + lambdaStr + "eV" + "_" +"_sd_"+ std::to_string(seed)+"_"+ std::to_string(runNum) + ".txt";
     std::ofstream outputFile(outputFileName);
 
 
@@ -818,7 +824,7 @@ int main(int argc, char* argv[]) {
     
 
     //Loop over quirks in file
-    for (int h = 1; h <= nquirks; ++h) {
+    for (int h = 1+skip; h <= nquirks; ++h) {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
        double front = 19e6; // in micrometers
