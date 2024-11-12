@@ -163,12 +163,11 @@ std::vector<long double> BctAdv(const std::vector<Magnet>& magnets, double x, do
 
 
 
-
 void initializeFieldMaps() {
     std::cout << "Initializing magnetic fields...\n";
 
     std::string export_dir = "./ExportedMagneticFields";
-    std::vector<std::string> magnet_types = {"MB","D1","D2","MQAB2","MQX"};
+    std::vector<std::string> magnet_types = {"MainDipole","D1","D2","InnerQuad","RevInnerQuad"};
 
     for (const auto& magnet_type : magnet_types) {
         std::string type_dir = export_dir + "/" + magnet_type;
@@ -179,7 +178,6 @@ void initializeFieldMaps() {
                 file_count++;
             }
         }
-
         size_t magnet_idx = 1;
         while (magnet_idx <= file_count) {
             std::stringstream ss;
@@ -770,7 +768,7 @@ int main(int argc, char* argv[]) {
     }
 
     //output file name for quirks
-    std::string outputFileName = stem + "_" + lambdaStr + "eV" + "_" +"_sd_"+ std::to_string(seed)+"_"+ std::to_string(runNum) + ".txt";
+    std::string outputFileName = stem + "_" + lambdaStr + "eV" +"_sd_"+ std::to_string(seed)+"_"+ std::to_string(runNum) + ".txt";
     std::ofstream outputFile(outputFileName);
 
 
@@ -895,7 +893,7 @@ int main(int argc, char* argv[]) {
 
         //main step loop
         while (!( (sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < 0.01) || 
-         (sqrt(r1[0] * r1[0] + r1[1] * r1[1]) > 1e6))) { //if quirk goes a meter off beamline, or too slow cancel event
+         (sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2)) > 1e6))) { //if quirks transverse cm goes a meter off beamline, or too slow cancel event
 
             int loct1 = Loct(r1[0], r1[1], r1[2]);
             int loct2 = Loct(r2[0], r2[1], r2[2]);

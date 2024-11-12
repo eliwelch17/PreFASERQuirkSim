@@ -43,10 +43,16 @@ In an attempt to make this as simple as possible for those who may use this (inc
 
 ## Magnetic field
 
-    The original mathematica code only included the D1 and D2 LHC dipole magnets and provided a nearly uniform field. This c++ simulation now includes realistic field maps of each magnet: D1,D2, MB, MQAB2 and MQX13. The quadripole magnets are to be added soon. A KDTree is used to quickly obtain the field value at a given point.
+    The original mathematica code only included the D1 and D2 LHC dipole magnets and provided a nearly uniform field. This c++ simulation now includes realistic field maps of each magnet: D1,D2, inner quadrupoles,reverse inner quadrupoles, main dipoles, and main quadrupole magnets. A KDTree is used to quickly obtain the field value at a given point.
 
 
-    Currently the B-field resolution has 1/5 x 1/5  (transverse plane) of that in the provided field maps.
+    The B-fields of the inner quadrupole magnets differ by year, however they differ only by a sign, thus they should have the same effect on the FASER acceptance for the quirks. The scaling factor for 2024 is usued as it has the largest integrated luminosity.
+
+
+    The B-field resolution has 1/4 x 1/4  (transverse plane) of that in the provided field maps yielding 1cm transverse resolution. 
+
+
+    B-field info courtesy of Alex Keyken from the BDSIM https://www.pp.rhul.ac.uk/bdsim/manual/ dev team.
 
    
 
