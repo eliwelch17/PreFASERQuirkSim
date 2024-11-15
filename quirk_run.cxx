@@ -962,6 +962,7 @@ int main(int argc, char *argv[])
         double prev_dist2 = std::numeric_limits<double>::max();
         double dist_com1min = std::numeric_limits<double>::max();
         bool foundMinimum = false;
+     
 
         // main step loop
         while (!((sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < 0.01) ||
@@ -1104,10 +1105,15 @@ int main(int argc, char *argv[])
 
             //Here we check the end of sim conditions
             //This program is meant to be usedin conjunction with the ATHENA quirk simulation
-            //which doesn't handle quirks that are far apart,it works fine when they sttart near their closest approach.
+            //which doesn't handle quirks that are far apart,it works fine when they start near their closest approach.
             //To handle this, we check for the first minimumd distance after "back"
-            if (r1[2] > back)
-            { // begin tracking once past back
+            if (r1[2]> back || r2[2]> back)
+            { 
+                //here we record the time at which the first quirk passes back to compare to muon time
+
+                
+                // begin tracking once past back
+
                
                 // track minimum distance
                 if (dist_com1 < dist_com1min)
@@ -1126,9 +1132,9 @@ int main(int argc, char *argv[])
                     std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
                     outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                               << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << "\n";
+                               << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() <<"\n";
                     outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                               << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count() << "\n";
+                               << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< "\n";
 
                     break;
                 }
