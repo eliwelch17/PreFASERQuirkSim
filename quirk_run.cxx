@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <filesystem>
 #include "include/KDTree3D.h"
+#include <unistd.h> 
 
 // Constants (based on the Mathematica script)
 const double ZCu = 29;
@@ -175,6 +176,8 @@ void initializeFieldMaps()
 
     std::string export_dir = "./ExportedMagneticFields";
     std::vector<std::string> magnet_types = {"MainDipole", "D1", "D2", "InnerQuad", "RevInnerQuad"};
+    const int max_retries = 5;  
+    const int retry_delay_seconds = 2;  
 
     for (const auto &magnet_type : magnet_types)
     {
@@ -188,6 +191,7 @@ void initializeFieldMaps()
                 file_count++;
             }
         }
+
         size_t magnet_idx = 1;
         while (magnet_idx <= file_count)
         {
@@ -202,15 +206,31 @@ void initializeFieldMaps()
             }
 
             std::vector<Point> points;
-            if (load_csv(filepath, points))
+            bool loaded = false;
+
+            for (int attempt = 1; attempt <= max_retries; ++attempt)
             {
-                Magnet magnet(points);
-                all_magnets.push_back(std::move(magnet));
-                std::cout << "Successfully loaded and initialized KD-tree for " << filepath << "\n";
+                if (load_csv(filepath, points))
+                {
+                    Magnet magnet(points);
+                    all_magnets.push_back(std::move(magnet));
+                    std::cout << "Successfully loaded and initialized KD-tree for " << filepath << "\n";
+                    loaded = true;
+                    break;  
+                }
+                else
+                {
+                    std::cerr << "Failed to load " << filepath << " (Attempt " << attempt << "/" << max_retries << ")\n";
+                    if (attempt < max_retries)
+                    {
+                      sleep(retry_delay_seconds);
+                    }
+                }
             }
-            else
+
+            if (!loaded)
             {
-                std::cerr << "Failed to load " << filepath << "\n";
+                std::cerr << "Giving up on " << filepath << " after " << max_retries << " attempts.\n";
             }
 
             magnet_idx++;
