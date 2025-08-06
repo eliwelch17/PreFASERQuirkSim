@@ -759,7 +759,7 @@ int main(int argc, char *argv[])
 
     initializeFieldMaps();
 
-    double back = 475.01;  // Default back value in micrometers
+    double back = 1e6 * 476.55;  // Default back value in micrometers
     double Lambda = 500.0; // Default lambda value in eV
     std::string inputFileName;
     int seed = 0;        // random seed
