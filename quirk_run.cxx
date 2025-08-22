@@ -140,18 +140,28 @@ bool load_csv(const std::string &filepath, std::vector<Point> &points)
     return !points.empty();
 }
 
+
+
+
 std::vector<long double> BctAdv(const std::vector<Magnet> &magnets, double x, double y, double z)
 {
-    for (const auto &magnet : magnets)
-    {
-        if (x < magnet.x_min || x > magnet.x_max ||
-            y < magnet.y_min || y > magnet.y_max ||
-            z < magnet.z_min || z > magnet.z_max)
-        {
-            continue;
-        }
-        // Perform the KD-tree nearest-neighbor search
-        Point nearest = magnet.kd_tree->find_closest_point(x, y, z);
+    static thread_local size_t last_idx = std::numeric_limits<size_t>::max();
+
+    auto in_bounds = [&](const Magnet &m) {
+        return !(x < m.x_min || x > m.x_max || y < m.y_min || y > m.y_max || z < m.z_min || z > m.z_max);
+    };
+
+    if (last_idx < magnets.size() && in_bounds(magnets[last_idx])) {
+        Point nearest = magnets[last_idx].kd_tree->find_closest_point(x, y, z);
+        return {static_cast<long double>(nearest.Fx),
+                static_cast<long double>(nearest.Fy),
+                static_cast<long double>(nearest.Fz)};
+    }
+
+    for (size_t i = 0; i < magnets.size(); ++i) {
+        if (!in_bounds(magnets[i])) continue;
+        last_idx = i;
+        Point nearest = magnets[i].kd_tree->find_closest_point(x, y, z);
 
         // Debugging KD-tree
         /*std::cout << std::fixed << std::setprecision(5);
@@ -166,7 +176,6 @@ std::vector<long double> BctAdv(const std::vector<Magnet> &magnets, double x, do
                 static_cast<long double>(nearest.Fz)};
     }
 
-    // If no magnet contains the point, return a default zero vector
     return {0.0L, 0.0L, 0.0L};
 }
 
@@ -238,7 +247,22 @@ void initializeFieldMaps()
     }
 }
 
+
+
 //-------------------- dE/dx funcitons ---------------------
+
+static inline long double horner_desc(const long double *c, int n, long double x) {
+    //for faster high power calcs
+    long double y = c[0];
+    for (int i = 1; i < n; ++i) y = y * x + c[i];
+    return y;
+}
+
+static inline double sample_standard_normal(std::mt19937 &gen) {
+    static thread_local std::normal_distribution<double> N01(0.0, 1.0);
+    return N01(gen);
+}
+
 std::vector<double> Cross(const std::vector<double> &v1, const std::vector<double> &v2)
 {
     // cross product function
@@ -324,7 +348,24 @@ double EoxCuAll(double mq, int param, double beta)
     }
     else
     {
-        scalar = 0.34289008715835223L + 33909.5576744394L * beta_ld + 2.6438521703577857e6L * std::pow(beta_ld, 2) - 5.582148886272709e8L * std::pow(beta_ld, 3) + 3.916027090833348e10L * std::pow(beta_ld, 4) - 1.6320734910018296e12L * std::pow(beta_ld, 5) + 4.608165819030902e13L * std::pow(beta_ld, 6) - 9.294312877895761e14L * std::pow(beta_ld, 7) + 1.370510669479835e16L * std::pow(beta_ld, 8) - 1.486143034696763e17L * std::pow(beta_ld, 9) + 1.174756123051605e18L * std::pow(beta_ld, 10) - 6.596425471576249e18L * std::pow(beta_ld, 11) + 2.496247979943447e19L * std::pow(beta_ld, 12) - 5.714216718459019e19L * std::pow(beta_ld, 13) + 5.982648430710585e19L * std::pow(beta_ld, 14);
+        static const long double cu_desc[15] = {
+            5.982648430710585e19L,
+        -5.714216718459019e19L,
+            2.496247979943447e19L,
+        -6.596425471576249e18L,
+            1.174756123051605e18L,
+        -1.486143034696763e17L,
+            1.370510669479835e16L,
+        -9.294312877895761e14L,
+            4.608165819030902e13L,
+        -1.6320734910018296e12L,
+            3.916027090833348e10L,
+        -5.582148886272709e8L,
+            2.6438521703577857e6L,
+            33909.5576744394L,
+            0.34289008715835223L
+        };
+        scalar = horner_desc(cu_desc, 15, beta_ld);
     }
 
     return static_cast<double>(scalar);
@@ -348,7 +389,24 @@ double EoxCcAll(double mq, int param, double beta)
     }
     else
     {
-        scalar = 0.3717416673986129L + 26377.245398907748L * beta_ld + 2.8807310255188923e6L * std::pow(beta_ld, 2) - 6.152256215129855e8L * std::pow(beta_ld, 3) + 4.441507306806682e10L * std::pow(beta_ld, 4) - 1.8750617184047375e12L * std::pow(beta_ld, 5) + 5.310954532975338e13L * std::pow(beta_ld, 6) - 1.0693146651849746e15L * std::pow(beta_ld, 7) + 1.5707786950520584e16L * std::pow(beta_ld, 8) - 1.695911162356092e17L * std::pow(beta_ld, 9) + 1.3350858443896056e18L * std::pow(beta_ld, 10) - 7.470735431733813e18L * std::pow(beta_ld, 11) + 2.819535817843903e19L * std::pow(beta_ld, 12) - 6.442273849826215e19L * std::pow(beta_ld, 13) + 6.737738168445225e19L * std::pow(beta_ld, 14);
+        static const long double cc_desc[15] = {
+            6.737738168445225e19L,
+        -6.442273849826215e19L,
+            2.819535817843903e19L,
+        -7.470735431733813e18L,
+            1.3350858443896056e18L,
+        -1.695911162356092e17L,
+            1.5707786950520584e16L,
+        -1.0693146651849746e15L,
+            5.310954532975338e13L,
+        -1.8750617184047375e12L,
+            4.441507306806682e10L,
+        -6.152256215129855e8L,
+            2.8807310255188923e6L,
+            26377.245398907748L,
+            0.3717416673986129L
+        };
+        scalar = horner_desc(cc_desc, 15, beta_ld);
     }
 
     return static_cast<double>(scalar);
@@ -372,7 +430,24 @@ double EoxRockAll(double mq, int param, double beta)
     }
     else
     {
-        scalar = 0.3044358906484703L + 25065.834574193614L * beta_ld + 2.350400267498349e6L * std::pow(beta_ld, 2) - 4.976688103007817e8L * std::pow(beta_ld, 3) + 3.513441645396524e10L * std::pow(beta_ld, 4) - 1.462059229558537e12L * std::pow(beta_ld, 5) + 4.113520947417071e13L * std::pow(beta_ld, 6) - 8.278484331611662e14L * std::pow(beta_ld, 7) + 1.2214854741842604e16L * std::pow(beta_ld, 8) - 1.3296907090779789e17L * std::pow(beta_ld, 9) + 1.0585274314396489e18L * std::pow(beta_ld, 10) - 6.003163825933505e18L * std::pow(beta_ld, 11) + 2.30021301170228e19L * std::pow(beta_ld, 12) - 5.34284980622759e19L * std::pow(beta_ld, 13) + 5.686153048402872e19L * std::pow(beta_ld, 14);
+        static const long double rock_desc[15] = {
+            5.686153048402872e19L,
+        -5.34284980622759e19L,
+            2.30021301170228e19L,
+        -6.003163825933505e18L,
+            1.0585274314396489e18L,
+        -1.3296907090779789e17L,
+            1.2214854741842604e16L,
+        -8.278484331611662e14L,
+            4.113520947417071e13L,
+        -1.462059229558537e12L,
+            3.513441645396524e10L,
+        -4.976688103007817e8L,
+            2.350400267498349e6L,
+            25065.834574193614L,
+            0.3044358906484703L
+        };
+        scalar = horner_desc(rock_desc, 15, beta_ld);
     }
 
     return static_cast<double>(scalar);
@@ -393,17 +468,14 @@ double EoxRockAll(double mq, int param, double beta)
     return boost::math::quantile(normal_dist, u);
 }*/
 
-// FIXME: once validated and random is turned back on, need to pass gen as input variable!
+
 double EoxGaus(double m, double z, double ZoA, double rho, double I0, double x0, double x1, double Cbar, double a, double k, double d0, double beta, double delta_x, std::function<double(double, int, double)> EoxAllFunc, std::mt19937 &gen)
 {
-    // de/dx gaus
     double z_eff = 1;
     double mean = EoxAllFunc(m, z_eff, beta);
-    double std_dev = 0.197 * sqrt(Xi(z_eff, ZoA, rho, beta) * delta_x * Emax(m, beta) * (1 - beta * beta / 2)) / delta_x;
-    std::normal_distribution<> d(mean, std_dev);
-
-    return d(gen);
-    // return truncated_normal(mean, std_dev); //for truncated distributions
+    double std_dev = 0.197 * std::sqrt(Xi(z_eff, ZoA, rho, beta) * delta_x * Emax(m, beta) * (1 - beta * beta / 2)) / delta_x;
+    double z_draw = sample_standard_normal(gen);
+    return mean + std_dev * z_draw;
 }
 
 // de/dx gausfor different materials
@@ -683,7 +755,7 @@ std::vector<double> CalculateForces(double mq, double Lambda, const std::vector<
 std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std::vector<double> &v, const std::vector<double> &vc, const std::vector<double> &s, double vc0, double vp, int loct, int q, const std::vector<double> &r, double dx, std::mt19937 &gen)
 {
     // total forces on quirks with gaus de/dex from materials
-    std::cout << std::setprecision(16);
+    
     double beta = 0.0;
     for (double component : v)
     {
