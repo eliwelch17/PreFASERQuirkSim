@@ -33,7 +33,7 @@ const double CbarCu = 4.4190;
 const double d0Cu = 0.08;
 
 const double ZCc = 8.56;
-const double ZoACc = ZCc / 40.04;
+const double ZoACc = 0.50274;
 const double rhoCc = 2.300;
 const double I0Cc = 135.2e-6;
 const double aCc = 0.07515;
@@ -44,7 +44,7 @@ const double CbarCc = 3.9464;
 const double d0Cc = 0.00;
 
 const double ZRock = 11;
-const double ZoARock = ZRock / 22.99;
+const double ZoARock = 0.5;
 const double rhoRock = 2.650;
 const double I0Rock = 136.4e-6;
 const double aRock = 0.08301;
@@ -768,6 +768,7 @@ int main(int argc, char *argv[])
     bool traj = false;   // trajectory output flag
     int skip = 0;
     int runNum = 0;
+    double beta_cutOff = 0.01; // minimum beta to continue simulating
 
     for (int i = 1; i < argc; ++i)
     {
@@ -779,6 +780,10 @@ int main(int argc, char *argv[])
         else if (arg == "-l" && i + 1 < argc)
         {
             Lambda = std::atof(argv[++i]);
+        }
+        else if (arg == "-betaCut" && i + 1 < argc)
+        {
+            beta_cutOff = std::atof(argv[++i]);
         }
         else if (arg == "-skip" && i + 1 < argc)
         {
@@ -811,7 +816,7 @@ int main(int argc, char *argv[])
         else
         {
             std::cerr << "Unknown option: " << arg << std::endl;
-            std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-skip <# events to skip>] [-runNum <run number>] [-t (trajectory output flag)] <input file>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [-b <back_value>] [-betaCut <min Beta cut off>] [-l <lambda_value>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-skip <# events to skip>] [-runNum <run number>] [-t (trajectory output flag)] <input file>" << std::endl;
             return 1;
         }
     }
@@ -884,6 +889,7 @@ int main(int argc, char *argv[])
     std::cout << "Running pre-FASER quirk simulation with the following paramters: " << std::endl;
     std::cout << "Final distance: " << back / (1.0e6) << "m" << std::endl;
     std::cout << "Lambda: " << Lambda << "eV" << std::endl;
+    std::cout << "Beta cut-off: " << beta_cutOff  << std::endl;
     if (nquirks == -1)
     {
         std::cout << "Number of quirks: All" << std::endl;
@@ -909,19 +915,13 @@ int main(int argc, char *argv[])
         data.push_back(row);
     }
 
-    nquirks += skip;
-    if (nquirks == -1)
-    {
-        nquirks = data.size() / 2;
-    }
-
-    if (nquirks > data.size() / 2) // ensure we dont try to sim more quirks than in file
-    {
-        nquirks = data.size() / 2;
-    }
+    int total = data.size() / 2;
+    int start = std::min(skip, total);
+    int count = (nquirks < 0) ? (total - start) : std::min(nquirks, total - start);
+    int end = start + count;
 
     // Loop over quirks in file
-    for (int h = 1 + skip; h <= nquirks; ++h)
+    for (int h = start; h < end; ++h)
     {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
@@ -985,7 +985,7 @@ int main(int argc, char *argv[])
      
 
         // main step loop
-        while (!((sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < 0.01) ||
+        while (!((sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < beta_cutOff) ||
                  (sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2)) > 1e6)))
         { // if quirks transverse cm goes a meter off beamline, or too slow cancel event
 
@@ -1111,7 +1111,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (stepcount % 1000000 == 0)
+            if (stepcount % 100000 == 0)
             {
                 std::cout << "z1: " << r1[2] << std::endl;
                 std::cout << "beta: " << sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) << std::endl;

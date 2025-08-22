@@ -13,7 +13,7 @@ In an attempt to make this as simple as possible for those who may use this (inc
 
 ## Usage: 
     
-    ./quirk_run [-b <back_value m>] [-l <lambda_value eV>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>
+    ./quirk_run [-b <back_value m>] [-l <lambda_value eV>] [-betaCut <min Beta-cut off>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>
 
 
     -b how far back to simulate the quirks in m (defult is 476.55m)
