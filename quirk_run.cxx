@@ -1025,6 +1025,7 @@ int main(int argc, char *argv[])
     bool traj = false;   // trajectory output flag
     int skip = 0;
     int runNum = 0;
+    double front = 19e6; // in micrometers
     double beta_cutOff = 0.01; // minimum beta to continue simulating
 
     for (int i = 1; i < argc; ++i)
@@ -1053,6 +1054,10 @@ int main(int argc, char *argv[])
         else if (arg == "-n" && i + 1 < argc)
         {
             nquirks = std::atof(argv[++i]);
+        }
+        else if (arg == "-f" && i + 1 < argc)
+        {
+            front = 1e6 * std::atof(argv[++i]); //input in meters
         }
         else if (arg == "-s" && i + 1 < argc)
         {
@@ -1187,8 +1192,7 @@ PROBE_B_at(0.05, 0.05, 26.21);
     {
         auto start = std::chrono::high_resolution_clock::now();
         // Set initial conditions
-        double front = 19e6; // in micrometers
-     
+       
 
         int q1 = 1, q2 = -1;
         double mq = round(data[2 * h][6]); // Quirk mass in GeV
