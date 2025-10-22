@@ -907,22 +907,10 @@ static inline void DBG_binZ_BOTH_ONCE(
             ++cnt;
         }
 
-        if (cnt>0){
-            const double c = 0.587 * q / 6.58;
-            const double Bx = (double)(Bx_sum/cnt), By=(double)(By_sum/cnt), Bz=(double)(Bz_sum/cnt);
-            const double vXBx=(double)(vXBx_sum/cnt), vXBy=(double)(vXBy_sum/cnt), vXBz=(double)(vXBz_sum/cnt);
-            const double Fx=c*vXBx, Fy=c*vXBy, Fz=c*vXBz;
-
-            std::cout.setf(std::ios::scientific);
-            std::cout << "POSBIN," << tag << "," << track
-                      << ",traj,z0=" << z0 << ",z1=" << z1
-                      << ",<B>=(" << Bx << "," << By << "," << Bz << ")"
-                      << ",<vXB>=(" << vXBx << "," << vXBy << "," << vXBz << ")"
-                      << ",<F_from_vXB=(" << Fx << "," << Fy << "," << Fz << ")>\n";
-        }
+    
     }
 
-    // --- Fixed-(x,y) probe (same for OLD/NEW if map+sampling are identical) ---
+   
     {
         const double zstep  = (z1 - z0) / std::max(1, Nsamp_fixed);
         const double zstart = z0 + 0.5*zstep;
@@ -982,8 +970,8 @@ static inline void PROBE_B_at(double x_m, double y_m, double z_m) {
 inline void BorisMagOnly(std::vector<double>& p, double mq,
     const std::vector<double>& B, int q, double dt)
 {
-// constants consistent with your force scale
-constexpr double kL = 0.587 / 6.58; // matches your F_L factor
+
+constexpr double kL = 0.587 / 6.58; 
 const double E = std::sqrt(mq*mq + DotProduct(p,p));
 if (E == 0.0) return;
 
