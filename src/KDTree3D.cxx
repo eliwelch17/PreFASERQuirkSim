@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 
+
 // Utility function to calculate squared distance
 double KDTree3D::squaredDistance(const Point& a, double x, double y, double z) {
     return (a.x - x) * (a.x - x) + (a.y - y) * (a.y - y) + (a.z - z) * (a.z - z);
@@ -51,7 +52,7 @@ void KDTree3D::findNearest(KDNode* node, double x, double y, double z, int depth
     int axis = depth % 3;
     double diff = (axis == 0) ? x - node->point.x : (axis == 1) ? y - node->point.y : z - node->point.z;
     KDNode* near = (diff < 0) ? node->left : node->right;
-    KDNode* far = (diff < 0) ? node->right : node->left;
+    KDNode* far  = (diff < 0) ? node->right : node->left;
 
     findNearest(near, x, y, z, depth + 1, best, bestDistSq);
 
@@ -72,3 +73,55 @@ Point KDTree3D::find_closest_point(double x, double y, double z) const {
 
     return best->point;  // Return the closest point directly
 }
+
+
+
+void KDTree3D::findKNN(KDNode* node, double x, double y, double z, int depth, int k,
+    std::priority_queue<std::pair<double,const KDNode*>>& heap) const
+{
+if (!node) return;
+
+const double distSq = squaredDistance(node->point, x, y, z);
+if ((int)heap.size() < k) {
+heap.emplace(distSq, node);
+} else if (distSq < heap.top().first) {
+heap.pop();
+heap.emplace(distSq, node);
+}
+
+const int axis = depth % 3;
+const double diff = (axis == 0) ? x - node->point.x
+  : (axis == 1) ? y - node->point.y
+                : z - node->point.z;
+
+KDNode* near = (diff < 0) ? node->left : node->right;
+KDNode* far  = (diff < 0) ? node->right : node->left;
+
+// Explore nearer side first
+findKNN(near, x, y, z, depth + 1, k, heap);
+
+// Prune with splitting plane distance
+const double planeDistSq = diff * diff;
+if ((int)heap.size() < k || planeDistSq < heap.top().first) {
+findKNN(far, x, y, z, depth + 1, k, heap);
+}
+}
+
+std::vector<Point> KDTree3D::k_closest_points(double x, double y, double z, int k) const
+{
+std::vector<Point> out;
+if (!root || k <= 0) return out;
+
+std::priority_queue<std::pair<double,const KDNode*>> heap; // max-heap
+findKNN(root, x, y, z, 0, k, heap);
+
+out.reserve(heap.size());
+// Extract from heap (largest first) then reverse to get nearest-first
+while (!heap.empty()) {
+out.push_back(heap.top().second->point);
+heap.pop();
+}
+std::reverse(out.begin(), out.end());
+return out;
+}
+

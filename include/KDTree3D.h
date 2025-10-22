@@ -2,6 +2,8 @@
 #define KDTREE3D_H
 
 #include <vector>
+#include <queue>
+#include <utility>
 
 // Structure to represent a 3D point with force components
 struct Point {
@@ -29,6 +31,8 @@ public:
     // Function to find the closest point to the query point (x, y, z)
     Point find_closest_point(double x, double y, double z) const;
 
+    std::vector<Point> k_closest_points(double x, double y, double z, int k) const;
+
 private:
     KDNode* root;
 
@@ -38,6 +42,11 @@ private:
     // Recursive nearest-neighbor search
     void findNearest(KDNode* node, double x, double y, double z, int depth,
                      KDNode*& best, double& bestDistSq) const;
+
+    //recursive kNN helper using a max-heap 
+    void findKNN(KDNode* node, double x, double y, double z, int depth, int k,
+                std::priority_queue<std::pair<double,const KDNode*> >& heap) const;                 
+
 
     // Utility to calculate squared distance between two points
     static double squaredDistance(const Point& a, double x, double y, double z);
