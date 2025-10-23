@@ -169,7 +169,7 @@ std::vector<long double> BctAdv(const std::vector<Magnet> &magnets,
 }
 */
 
-std::vector<long double> BctAdv(const std::vector<Magnet> &magnets,
+std::vector<double> BctAdv(const std::vector<Magnet> &magnets,
     double x, double y, double z)
 {
 static thread_local size_t last_idx = std::numeric_limits<size_t>::max();
@@ -195,22 +195,22 @@ const Magnet &m = magnets[idx];
 if (!m.kd_tree) return {0.0L, 0.0L, 0.0L};
 
 constexpr int K = 8;            
-constexpr long double EPS = 1e-9L;
+constexpr double EPS = 1e-9L;
 
 const auto neigh = m.kd_tree->k_closest_points(x, y, z, K);
 if (neigh.empty()) return {0.0L, 0.0L, 0.0L};
 
-long double wsum = 0.0L, bx = 0.0L, by = 0.0L, bz = 0.0L;
+double wsum = 0.0L, bx = 0.0L, by = 0.0L, bz = 0.0L;
 for (const auto &pt : neigh) {
-const long double dx = (long double)x - (long double)pt.x;
-const long double dy = (long double)y - (long double)pt.y;
-const long double dz = (long double)z - (long double)pt.z;
-const long double d2 = dx*dx + dy*dy + dz*dz;
-const long double w  = 1.0L / std::sqrt(d2 + EPS);   // IDW p=1
-bx += w * (long double)pt.Fx;
-by += w * (long double)pt.Fy;
-bz += w * (long double)pt.Fz;
-wsum += w;
+    const double dx = (double)x - (double)pt.x;
+    const double dy = (double)y - (double)pt.y;
+    const double dz = (double)z - (double)pt.z;
+    const double d2 = dx*dx + dy*dy + dz*dz;
+    const double w  = 1.0L / std::sqrt(d2 + EPS);   // IDW p=1
+    bx += w * (double)pt.Fx;
+    by += w * (double)pt.Fy;
+    bz += w * (double)pt.Fz;
+    wsum += w;
 }
 if (wsum == 0.0L) return {0.0L, 0.0L, 0.0L};
 return { bx/wsum, by/wsum, bz/wsum };
@@ -645,33 +645,18 @@ std::vector<double> MultiplyVector(const std::vector<double> &v, double scalar)
     return {v[0] * scalar, v[1] * scalar, v[2] * scalar};
 }
 
-std::vector<long double> MultiplyVectorLong(const std::vector<long double> &v, long double scalar)
-{
-    return {v[0] * scalar, v[1] * scalar, v[2] * scalar};
+
+
+inline std::vector<double> DivideVector(const std::vector<double>& v, double s){
+  if (!std::isfinite(s) || std::abs(s) < 1e-15) s = (s>=0?1e-15:-1e-15);
+  return {v[0]/s, v[1]/s, v[2]/s};
 }
 
-std::vector<double> DivideVector(const std::vector<double> &v, double scalar)
-{
-    long double scalar_long = static_cast<long double>(scalar);
-    std::vector<double> div_v(3);
-    std::vector<long double> div_v_temp(3);
-    for (size_t i = 0; i < v.size(); ++i)
-    {
-        div_v_temp[i] = static_cast<long double>(v[i]) / scalar_long;
-        div_v[i] = static_cast<double>(div_v_temp[i]);
-    }
 
-    return {div_v[0], div_v[1], div_v[2]};
-}
-
-double DotProduct(const std::vector<double> &v1, const std::vector<double> &v2)
-{
-    // employ Kahan Summation method
-    double sum = 0.0;
-    double c = 0.0;
-    for (size_t i = 0; i < v1.size(); ++i)
-    {
-        double y = v1[i] * v2[i] - c;
+double DotProduct(const std::vector<double> &v1, const std::vector<double> &v2) {
+    double sum=0.0, c=0.0;
+    for (size_t i=0;i<v1.size();++i) {
+        double y = v1[i]*v2[i] - c;
         double t = sum + y;
         c = (t - sum) - y;
         sum = t;
@@ -679,22 +664,13 @@ double DotProduct(const std::vector<double> &v1, const std::vector<double> &v2)
     return sum;
 }
 
-std::vector<double> Normalize(const std::vector<double> &v)
-{
-    double norm = std::sqrt(DotProduct(v, v));
-    return DivideVector(v, norm);
+inline std::vector<double> Normalize(const std::vector<double>& v){
+  double n = std::sqrt(DotProduct(v,v));
+  if (n < 1e-15) n = 1e-15;
+  return {v[0]/n, v[1]/n, v[2]/n};
 }
 
-std::vector<long double> NormalizeLong(const std::vector<double> &v)
-{
-    long double norm = std::sqrt(static_cast<long double>(DotProduct(v, v)));
-    std::vector<long double> normalizedVector(v.size());
-    for (size_t i = 0; i < v.size(); ++i)
-    {
-        normalizedVector[i] = static_cast<long double>(v[i]) / norm;
-    }
-    return normalizedVector;
-}
+
 
 // Function to calculate the value of ct
 double CalculateCt(const std::vector<double> &v, const std::vector<double> &Beta, const std::vector<double> &r1, const std::vector<double> &r2, const std::vector<double> &F, double E1, double E2)
@@ -721,28 +697,22 @@ std::vector<double> CalculateForces(double mq, double Lambda, const std::vector<
     beta = std::sqrt(beta);
     // First term: -Lambda^2 / 100 * sqrt(1 - vc0^2) * s
 
-    std::vector<long double> s_long(s.begin(), s.end());
-    std::vector<long double> vc_long(vc.begin(), vc.end());
 
-    long double vc0_ld = static_cast<long double>(vc0);
-    long double term1_factor = -Lambda * Lambda / 100.0L * std::sqrt(1.0L - vc0_ld * vc0_ld);
-    std::vector<long double> term1 = MultiplyVectorLong(s_long, term1_factor);
+    double term1_factor = -Lambda * Lambda / 100.0L * std::sqrt(1.0L - vc0* vc0);
+    std::vector<double> term1 = MultiplyVector(s, term1_factor);
 
     // std::vector<double> term1 = MultiplyVector(s, -Lambda * Lambda / 100.0 * std::sqrt(1 - vc0 * vc0));
     // std::cout<<"term1: "<<term1[0]<<", "<<term1[1]<<", "<<term1[2]<<std::endl;
 
-    long double vp_ld = static_cast<long double>(vp);
-    long double term2_factor = -Lambda * Lambda / 100.0L * vp_ld / std::sqrt(1.0L - vc0_ld * vc0_ld);
-    std::vector<long double> term2 = MultiplyVectorLong(vc_long, term2_factor);
+    double term2_factor = -Lambda * Lambda / 100.0L * vp / std::sqrt(1.0L - vc0 * vc0);
+    std::vector<double> term2 = MultiplyVector(vc, term2_factor);
 
     // Second term: -Lambda^2 / 100 * vp / sqrt(1 - vc0^2) * vc
 
-    std::vector<long double> v_long(v.begin(), v.end());
-
-    // std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
-    std::vector<long double> bct_long = BctAdv(all_magnets, r[0], r[1], r[2]);
-    std::vector<long double> crossProductLong = CrossLong(v_long, bct_long);
-    std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * static_cast<long double>(q));
+ 
+    std::vector<double> bct = BctAdv(all_magnets, r[0], r[1], r[2]);
+    std::vector< double> crossProduct = Cross(v, bct);
+    std::vector<double> term3 = MultiplyVector(crossProduct, 0.587L * q);
      
     // Fourth term: based on loct value
     double term4;
@@ -768,7 +738,7 @@ std::vector<double> CalculateForces(double mq, double Lambda, const std::vector<
         throw std::invalid_argument("Invalid loct value");
     }
 
-    std::vector<long double> term4vec = MultiplyVectorLong(NormalizeLong(v), static_cast<long double>(term4));
+    std::vector<double> term4vec = MultiplyVector(Normalize(v), term4);
 
     // Summing up all terms
     std::vector<double> force(3);
@@ -791,20 +761,20 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
     }
     beta = std::sqrt(beta);
     // First term: -Lambda^2 / 100 * sqrt(1 - vc0^2) * s
-    long double sqrtTerm1 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
+    double sqrtTerm1 = std::sqrt(static_cast<double>(1.0) - vc0 * vc0);
     std::vector<double> term1 = MultiplyVector(s, -Lambda * Lambda / 100.0 * static_cast<double>(sqrtTerm1));
 
     // Second term: -Lambda^2 / 100 * vp / sqrt(1 - vc0^2) * vc
-    long double sqrtTerm2 = std::sqrt(static_cast<long double>(1.0) - static_cast<long double>(vc0) * static_cast<long double>(vc0));
-    std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / static_cast<double>(sqrtTerm2));
+    double sqrtTerm2 = std::sqrt(1.0 - vc0 * vc0);
+    std::vector<double> term2 = MultiplyVector(vc, -Lambda * Lambda / 100.0 * vp / sqrtTerm2);
 
     // Third term: 0.587 * q * Cross(v, Bct(r[0], r[1], r[2]))
-    std::vector<long double> v_long(v.begin(), v.end());
-    std::vector<long double> bct_long = BctAdv(all_magnets, r[0], r[1], r[2]);
+    
+    std::vector<double> bct = BctAdv(all_magnets, r[0], r[1], r[2]);
     // std::vector<long double> bct_long = BctLong(r[0], r[1], r[2]);
 
-    std::vector<long double> crossProductLong = CrossLong(v_long, bct_long);
-    std::vector<long double> term3 = MultiplyVectorLong(crossProductLong, 0.587L * static_cast<long double>(q));
+   
+    std::vector<double> term3 = MultiplyVector(Cross(v, bct), 0.587L * q);
 
     // Fourth term: based on loct value with Gaussian variation
     double term4;
@@ -833,159 +803,18 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
         throw std::invalid_argument("Invalid loct value");
     }
 
-    std::vector<long double> term4vec = MultiplyVectorLong(NormalizeLong(v), static_cast<long double>(term4));
+    std::vector<double> term4vec = MultiplyVector(Normalize(v), term4);
     // Summing up all terms
     std::vector<double> force(3);
     for (size_t i = 0; i < force.size(); ++i)
     {
-        force[i] = (static_cast<double>(term1[i]) + static_cast<double>(term2[i]) + static_cast<double>(term3[i]) - term4vec[i]) / 6.58;
+        force[i] = (term1[i] + term2[i] + term3[i] - term4vec[i]) / 6.58;
     }
 
     return force;
 }
 
 
-
-
-// ===== bin-averaged OLD (B map) =====
-// --- unified z-bin debugger: along-trajectory AND fixed-(x,y) probe ---
-static inline void DBG_binZ_BOTH_ONCE(
-    const char* tag,                 // "OLD" or "NEW"
-    const char* track,               // "r1" or "r2"
-    const std::vector<double>& r,    // current pos [um]
-    const std::vector<double>& v,    // current vel (unitless beta)
-    int q,                           // charge
-    int Nsamp_traj  = 40,
-    int Nsamp_fixed = 200,
-    double x_fixed_um = 5.0e4,
-    double y_fixed_um = 5.0e4)
-{
-    // Define bins: [26.10,26.20], [26.20,26.30], ..., [26.90,27.00] (in um)
-    static const std::vector<std::pair<double,double>> bins = {
-        {26.10e6,26.20e6},{26.20e6,26.30e6},{26.30e6,26.40e6},{26.40e6,26.50e6},
-        {26.50e6,26.60e6},{26.60e6,26.70e6},{26.70e6,26.80e6},{26.80e6,26.90e6},
-        {26.90e6,27.00e6}
-    };
-
-    // Separate indices per (tag,track)
-    static size_t i_old_r1 = 0, i_old_r2 = 0, i_new_r1 = 0, i_new_r2 = 0;
-    size_t* idx_ptr = nullptr;
-    if      (!std::strcmp(tag,"OLD") && !std::strcmp(track,"r1")) idx_ptr = &i_old_r1;
-    else if (!std::strcmp(tag,"OLD") && !std::strcmp(track,"r2")) idx_ptr = &i_old_r2;
-    else if (!std::strcmp(tag,"NEW") && !std::strcmp(track,"r1")) idx_ptr = &i_new_r1;
-    else if (!std::strcmp(tag,"NEW") && !std::strcmp(track,"r2")) idx_ptr = &i_new_r2;
-    else return; // unknown key
-
-    size_t& i = *idx_ptr;
-    if (i >= bins.size()) return;
-
-    const double z0 = bins[i].first;
-    const double z1 = bins[i].second;
-
-    // Only fire ONCE when we've reached the end of the current bin
-    if (r[2] < z1) return;
-
-    // --- Along-trajectory probe (hold x,y at current r; sweep z within bin with current v) ---
-    {
-        const double zstep  = (z1 - z0) / std::max(1, Nsamp_traj);
-        const double zstart = z0 + 0.5*zstep;
-
-        long double Bx_sum=0, By_sum=0, Bz_sum=0;
-        long double vXBx_sum=0, vXBy_sum=0, vXBz_sum=0;
-        int cnt = 0;
-
-        std::vector<long double> vL{v[0], v[1], v[2]};
-        for (int k=0; k<Nsamp_traj; ++k){
-            const double zq = zstart + k*zstep;
-            const double xq = r[0], yq = r[1];
-
-            auto B = BctAdv(all_magnets, xq, yq, zq);
-            auto vXB = CrossLong(vL, B);
-
-            Bx_sum+=B[0]; By_sum+=B[1]; Bz_sum+=B[2];
-            vXBx_sum+=vXB[0]; vXBy_sum+=vXB[1]; vXBz_sum+=vXB[2];
-            ++cnt;
-        }
-
-    
-    }
-
-   
-    {
-        const double zstep  = (z1 - z0) / std::max(1, Nsamp_fixed);
-        const double zstart = z0 + 0.5*zstep;
-
-        long double Bx_sum=0, By_sum=0, Bz_sum=0;
-        long double vXBx_sum=0, vXBy_sum=0, vXBz_sum=0;
-        int cnt = 0;
-
-        std::vector<long double> vL{v[0], v[1], v[2]};
-        for (int k=0; k<Nsamp_fixed; ++k){
-            const double zq = zstart + k*zstep;
-            auto B   = BctAdv(all_magnets, x_fixed_um, y_fixed_um, zq);
-            auto vXB = CrossLong(vL, B);
-
-            Bx_sum+=B[0]; By_sum+=B[1]; Bz_sum+=B[2];
-            vXBx_sum+=vXB[0]; vXBy_sum+=vXB[1]; vXBz_sum+=vXB[2];
-            ++cnt;
-        }
-
-        if (cnt>0){
-            const double c = 0.587 * q / 6.58;
-            const double Bx = (double)(Bx_sum/cnt), By=(double)(By_sum/cnt), Bz=(double)(Bz_sum/cnt);
-            const double vXBx=(double)(vXBx_sum/cnt), vXBy=(double)(vXBy_sum/cnt), vXBz=(double)(vXBz_sum/cnt);
-            const double Fx=c*vXBx, Fy=c*vXBy, Fz=c*vXBz;
-
-            std::cout.setf(std::ios::scientific);
-            std::cout << "POSBIN," << tag << "," << track
-                      << ",fixedXY,x=" << x_fixed_um << ",y=" << y_fixed_um
-                      << ",z0=" << z0 << ",z1=" << z1
-                      << ",<B>=(" << Bx << "," << By << "," << Bz << ")"
-                      << ",<vXB>=(" << vXBx << "," << vXBy << "," << vXBz << ")"
-                      << ",<F_from_vXB=(" << Fx << "," << Fy << "," << Fz << ")>\n";
-        }
-    }
-
-    // advance to next bin after printing
-    ++i;
-}
-
-
-static inline void PROBE_B_at(double x_m, double y_m, double z_m) {
-    const double UM = 1e6; // meters -> micrometers
-    const double x_um = x_m * UM;
-    const double y_um = y_m * UM;
-    const double z_um = z_m * UM;
-
-    auto B = BctAdv(all_magnets, x_um, y_um, z_um);
-    std::cout.setf(std::ios::scientific);
-    std::cout << "BPROBE"
-              << ",x_m=" << x_m << ",y_m=" << y_m << ",z_m=" << z_m
-              << ",x_um=" << x_um << ",y_um=" << y_um << ",z_um=" << z_um
-              << ",B=(" << (double)B[0] << "," << (double)B[1] << "," << (double)B[2] << ")"
-              << "\n";
-}
-
-
-inline void BorisMagOnly(std::vector<double>& p, double mq,
-    const std::vector<double>& B, int q, double dt)
-{
-
-constexpr double kL = 0.587 / 6.58; 
-const double E = std::sqrt(mq*mq + DotProduct(p,p));
-if (E == 0.0) return;
-
-// t = (q * kL * dt / E) * B
-std::vector<double> t = MultiplyVector(B, (q * kL * dt) / (2*E));
-const double t2 = DotProduct(t, t);
-std::vector<double> s = MultiplyVector(t, 2.0 / (1.0 + t2));
-
-// p- (no E-field), then rotations
-const std::vector<double> p_minus = p;
-const std::vector<double> p_prime = AddVectors(p_minus, Cross(p_minus, t));
-const std::vector<double> p_plus  = AddVectors(p_minus,  Cross(p_prime, s));
-p = p_plus;
-}
 
 
 
@@ -1172,7 +1001,6 @@ int main(int argc, char *argv[])
 
 
     // after map load / bounds / KD init are done, before stepping:
-PROBE_B_at(0.05, 0.05, 26.21);
 
 
     // Loop over quirks in file
@@ -1230,7 +1058,7 @@ PROBE_B_at(0.05, 0.05, 26.21);
         int stepcount = 0;
         int n = 1;
         double lastSaveTime = 0;
-        double saveInterval = .0001; // nano seconds
+        double saveInterval = .01; // nano seconds
         double dx1pre = 0.0, dx2pre = 0.0;
 
         double prev_dist1 = std::numeric_limits<double>::max();
@@ -1342,7 +1170,7 @@ PROBE_B_at(0.05, 0.05, 26.21);
             }
 
             // Update quirk momentum and position
-            /*
+            
             p1 = AddVectors(p1, MultiplyVector(F1, dt1));
             p2 = AddVectors(p2, MultiplyVector(F2, dt2));
 
@@ -1350,76 +1178,16 @@ PROBE_B_at(0.05, 0.05, 26.21);
             r2 = AddVectors(r2, MultiplyVector(AddVectors(v2, DivideVector(p2, sqrt(mq * mq + DotProduct(p2, p2)))), 300000.0 * dt2 / 2));
 
             t1 += dt1;
-            t2 += dt2;*/
+            t2 += dt2;
 
-            // === Boris for B-only; Euler for (string + dE/dx); same drift ===
-
-// cache old velocities for trapezoid drift
-const std::vector<double> v1_old = v1;
-const std::vector<double> v2_old = v2;
-
-// --- split total force into Lorentz (B-only) + non-magnetic ---
-auto B1L = BctAdv(all_magnets, r1[0], r1[1], r1[2]);
-auto B2L = BctAdv(all_magnets, r2[0], r2[1], r2[2]);
-std::vector<double> B1 = { (double)B1L[0], (double)B1L[1], (double)B1L[2] };
-std::vector<double> B2 = { (double)B2L[0], (double)B2L[1], (double)B2L[2] };
-
-std::vector<long double> v1L{ v1[0], v1[1], v1[2] };
-std::vector<long double> v2L{ v2[0], v2[1], v2[2] };
-auto vXB1 = CrossLong(v1L, B1L);
-auto vXB2 = CrossLong(v2L, B2L);
-
-// Lorentz-only force in SAME units as F1/F2 (0.587*q and /6.58)
-std::vector<double> FL1 = {
-    (double)(0.587L * q1 * vXB1[0] / 6.58L),
-    (double)(0.587L * q1 * vXB1[1] / 6.58L),
-    (double)(0.587L * q1 * vXB1[2] / 6.58L)
-};
-std::vector<double> FL2 = {
-    (double)(0.587L * q2 * vXB2[0] / 6.58L),
-    (double)(0.587L * q2 * vXB2[1] / 6.58L),
-    (double)(0.587L * q2 * vXB2[2] / 6.58L)
-};
-
-std::vector<double> F1_nonmag = SubtractVectors(F1, FL1);
-std::vector<double> F2_nonmag = SubtractVectors(F2, FL2);
-
-// (1) half-kick from non-magnetic forces
-p1 = AddVectors(p1, MultiplyVector(F1_nonmag, 0.5 * dt1));
-p2 = AddVectors(p2, MultiplyVector(F2_nonmag, 0.5 * dt2));
-
-// (2) Boris rotation for B-only
-BorisMagOnly(p1, mq, B1, q1, dt1);
-BorisMagOnly(p2, mq, B2, q2, dt2);
-
-// (3) second half-kick from non-magnetic forces
-p1 = AddVectors(p1, MultiplyVector(F1_nonmag, 0.5 * dt1));
-p2 = AddVectors(p2, MultiplyVector(F2_nonmag, 0.5 * dt2));
-
-// (4) update energies/velocities
-E1 = sqrt(mq * mq + DotProduct(p1, p1));  v1 = DivideVector(p1, E1);
-E2 = sqrt(mq * mq + DotProduct(p2, p2));  v2 = DivideVector(p2, E2);
-
-// (5) drift (same trapezoid as before, but using v_old and updated v)
-r1 = AddVectors(r1, MultiplyVector(AddVectors(v1_old, v1), 300000.0 * dt1 / 2.0));
-r2 = AddVectors(r2, MultiplyVector(AddVectors(v2_old, v2), 300000.0 * dt2 / 2.0));
-
-// (6) advance times
-t1 += dt1;
-t2 += dt2;
-
-if (!std::isfinite(r1[0]) || !std::isfinite(r1[1]) || !std::isfinite(r1[2]) ||
-    !std::isfinite(r2[0]) || !std::isfinite(r2[1]) || !std::isfinite(r2[2])) {
-    std::cerr << "NaN detected in positions at event " << h << ", skipping.\n";
-    break; // skip this event
-}
+ 
+            if (!std::isfinite(r1[0]) || !std::isfinite(r1[1]) || !std::isfinite(r1[2]) ||
+                !std::isfinite(r2[0]) || !std::isfinite(r2[1]) || !std::isfinite(r2[2])) {
+                std::cerr << "NaN detected in positions at event " << h << ", skipping.\n";
+                break; // skip this event
+            }
 
         
-            DBG_binZ_BOTH_ONCE("OLD", "r1", r1, v1, q1);
-            DBG_binZ_BOTH_ONCE("OLD", "r2", r2, v2, q2);
-
-
-            
 
             // Determine the detector scintillators, currently not used
             // int layer1f = Layer(r1[0], r1[1], r1[2]);
