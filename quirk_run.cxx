@@ -194,7 +194,7 @@ last_idx = idx;
 const Magnet &m = magnets[idx];
 if (!m.kd_tree) return {0.0L, 0.0L, 0.0L};
 
-constexpr int K = 8;            // try 8–16 if you want smoother
+constexpr int K = 8;            
 constexpr long double EPS = 1e-9L;
 
 const auto neigh = m.kd_tree->k_closest_points(x, y, z, K);
@@ -1014,7 +1014,7 @@ int main(int argc, char *argv[])
     int skip = 0;
     int runNum = 0;
     double front = 19e6; // in micrometers
-    double beta_cutOff = 0.01; // minimum beta to continue simulating
+    double beta_cutOff = 0.1; // minimum beta to continue simulating
 
     for (int i = 1; i < argc; ++i)
     {
@@ -1408,6 +1408,11 @@ r2 = AddVectors(r2, MultiplyVector(AddVectors(v2_old, v2), 300000.0 * dt2 / 2.0)
 t1 += dt1;
 t2 += dt2;
 
+if (!std::isfinite(r1[0]) || !std::isfinite(r1[1]) || !std::isfinite(r1[2]) ||
+    !std::isfinite(r2[0]) || !std::isfinite(r2[1]) || !std::isfinite(r2[2])) {
+    std::cerr << "NaN detected in positions at event " << h << ", skipping.\n";
+    break; // skip this event
+}
 
         
             DBG_binZ_BOTH_ONCE("OLD", "r1", r1, v1, q1);
