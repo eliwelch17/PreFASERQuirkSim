@@ -1197,8 +1197,8 @@ int main(int argc, char *argv[])
 
         // main step loop
         while (!((sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]) < beta_cutOff) ||
-                 (sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2)) > 1e6)))
-        { // if quirks transverse cm goes a meter off beamline, or too slow cancel event
+                 (sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2)) > 1.5e6)))
+        { // if quirks transverse cm goes a 2.0m off beamline, or too slow cancel event
 
             int loct1 = Loct(r1[0], r1[1], r1[2]);
             int loct2 = Loct(r2[0], r2[1], r2[2]);
@@ -1346,14 +1346,15 @@ int main(int argc, char *argv[])
 
 
             //Here we check the end of sim conditions
-            //This program is meant to be usedin conjunction with the ATHENA quirk simulation
-            //which doesn't handle quirks that are far apart,it works fine when they start near their closest approach.
-            //To handle this, we check for the first minimumd distance after back - half_osc_length
-            if (r1[2] > back - half_osc_length || r2[2] > back - half_osc_length)
+            //there are 2 ways we end:
+            //1) we start far from back in which case we end once the quirks have their closest min to back
+            //2) we start close t oback in which case we end right where they start as the quirks are already started on the closest min
+
+
+            if (r1[2] >= back - (half_osc_length*1.0) || r2[2] >= back - (half_osc_length*1.0))
 
             { 
-                
-
+        
                 
                 // begin tracking once past back
 
@@ -1365,8 +1366,7 @@ int main(int argc, char *argv[])
                 }
 
                 // check if we've encountered a local minimum
-                if (prev_dist2 != std::numeric_limits<double>::max() &&
-                    dist_com1 > prev_dist1 && prev_dist1 < prev_dist2)
+                if ((r1[2] >= back  || r2[2] >= back ) ||within_half|| (prev_dist2 != std::numeric_limits<double>::max() &&dist_com1 > prev_dist1 && prev_dist1 < prev_dist2))
                 {
                     foundMinimum = true;
                   
