@@ -937,6 +937,7 @@ int main(int argc, char *argv[])
     int runNum = 0;
     double front = 19e6; // in micrometers
     double beta_cutOff = 0.1; // minimum beta to continue simulating
+    double back_cutoff = 472.77;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -1366,7 +1367,8 @@ int main(int argc, char *argv[])
                 }
 
                 // check if we've encountered a local minimum
-                if ((r1[2] >= back  || r2[2] >= back ) ||within_half|| (prev_dist2 != std::numeric_limits<double>::max() &&dist_com1 > prev_dist1 && prev_dist1 < prev_dist2))
+                if ((r1[2] >= back  || r2[2] >= back ) ||within_half||((prev_dist2 != std::numeric_limits<double>::max() && dist_com1 > prev_dist1 && prev_dist1 < prev_dist2) &&(r1[2] >= back_cutoff || r2[2] >= back_cutoff)))
+
                 {
                     foundMinimum = true;
                   
