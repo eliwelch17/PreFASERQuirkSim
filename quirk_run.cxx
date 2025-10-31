@@ -937,7 +937,7 @@ int main(int argc, char *argv[])
     int runNum = 0;
     double front = 19e6; // in micrometers
     double beta_cutOff = 0.1; // minimum beta to continue simulating
-    double back_cutoff = 472.77;
+    double back_cutoff = 472.77e6;
 
     for (int i = 1; i < argc; ++i)
     {
