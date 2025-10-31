@@ -910,6 +910,62 @@ double SurvivalProb(double Epsilon, double Epsilon1, double Lambda_eV, double l2
 }
 
 
+// Put this near the top (after your helpers are declared so we can use
+// AddVectors/SubtractVectors/MultiplyVector/DivideVector/DotProduct/Normalize/Loct/CalculateForces)
+
+static inline void SyncQuirksToSameTime(
+    double t_star,
+    std::vector<double>& r1, std::vector<double>& p1, double& t1, int q1,
+    std::vector<double>& r2, std::vector<double>& p2, double& t2, int q2,
+    double mq, double Lambda)
+{
+  auto v_from_p = [&](const std::vector<double>& p){
+    double E = std::sqrt(mq*mq + DotProduct(p,p));
+    return DivideVector(p, E);
+  };
+
+  auto advance_lag = [&](std::vector<double>& r,
+                         std::vector<double>& p,
+                         double& t,
+                         const std::vector<double>& rO,
+                         const std::vector<double>& pO,
+                         int q,
+                         double dt)
+  {
+    if (dt <= 0) return;
+
+    // velocity at start
+    std::vector<double> v = v_from_p(p);
+
+    // string direction: unit vector from other quirk to this quirk
+    std::vector<double> dr = SubtractVectors(r, rO);
+    std::vector<double> s  = Normalize(dr);
+
+    // decompose v into parallel / perpendicular to s
+    double vpar = DotProduct(v, s);
+    std::vector<double> vperp = SubtractVectors(v, MultiplyVector(s, vpar));
+    double vperp0 = std::sqrt(DotProduct(vperp, vperp));
+
+    // location/material
+    int loct = Loct(r[0], r[1], r[2]);
+
+    // deterministic force (same EOM parts you use elsewhere)
+    std::vector<double> F = CalculateForces(mq, Lambda, v, vperp, s, vperp0, vpar, loct, q, r);
+
+    // trapezoidal update over dt
+    std::vector<double> p_new = AddVectors(p, MultiplyVector(F, dt));
+    std::vector<double> v_new = v_from_p(p_new);
+    r = AddVectors(r, MultiplyVector(AddVectors(v, v_new), 300000.0 * dt * 0.5));
+    p = p_new;
+    t += dt;
+  };
+
+  if (t1 < t_star) advance_lag(r1, p1, t1, r2, p2, q1, t_star - t1);
+  if (t2 < t_star) advance_lag(r2, p2, t2, r1, p1, q2, t_star - t2);
+}
+
+
+
 
 // ##############################################################################################################################
 //
@@ -926,7 +982,7 @@ int main(int argc, char *argv[])
 
     initializeFieldMaps();
 
-    double back = 1e6 * 474.6;  // Default back value in micrometers (vetoNu0), faser z=0 at 477.76
+    double back = 472.76e6+0.75e6; //Start of calypso simulation in faser coords+.75m buffer. Default back value in micrometers (vetoNu0), faser z=0 at 477.76
     double Lambda = 500.0; // Default lambda value in eV
     std::string inputFileName;
     int seed = 0;        // random seed
@@ -937,7 +993,7 @@ int main(int argc, char *argv[])
     int runNum = 0;
     double front = 19e6; // in micrometers
     double beta_cutOff = 0.1; // minimum beta to continue simulating
-    double back_cutoff = 472.77e6;
+    double back_cutoff = 474.6e6; //  location of vetoNu0
 
     for (int i = 1; i < argc; ++i)
     {
@@ -1352,25 +1408,33 @@ int main(int argc, char *argv[])
             //2) we start close t oback in which case we end right where they start as the quirks are already started on the closest min
 
 
-            if (r1[2] >= back - (half_osc_length*1.0) || r2[2] >= back - (half_osc_length*1.0))
+            //if (r1[2] >= back - (half_osc_length*1.0) || r2[2] >= back - (half_osc_length*1.0))
+            //to ensure we can simulate in calypso just cut off at back
+            if (r1[2] >= back  || r2[2] >= back )
 
             { 
-        
+
+                double t_star = (t1 > t2) ? t1 : t2;
+                SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
+
+                                
+
+                        
                 
                 // begin tracking once past back
 
                
                 // track minimum distance
-                if (dist_com1 < dist_com1min)
-                {
-                    dist_com1min = dist_com1;
-                }
+                //if (dist_com1 < dist_com1min)
+               // {
+                    //dist_com1min = dist_com1;
+                //}
 
                 // check if we've encountered a local minimum
-                if ((r1[2] >= back  || r2[2] >= back ) ||within_half||((prev_dist2 != std::numeric_limits<double>::max() && dist_com1 > prev_dist1 && prev_dist1 < prev_dist2) &&(r1[2] >= back_cutoff || r2[2] >= back_cutoff)))
+                //if ((r1[2] >= back  || r2[2] >= back ) ||within_half||((prev_dist2 != std::numeric_limits<double>::max() && dist_com1 > prev_dist1 && prev_dist1 < prev_dist2) &&(r1[2] >= back_cutoff || r2[2] >= back_cutoff)))
 
-                {
-                    foundMinimum = true;
+                //{
+                   // foundMinimum = true;
                   
 
                     //std::cout << "Minimum distance found at z = " << r1[2] << " with distance: " << dist_com1min << std::endl;
@@ -1384,10 +1448,10 @@ int main(int argc, char *argv[])
                                << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << p_surv[0] << " " << p_surv[1] << " " << p_surv[2] << "\n";
 
                     break;
-                }
+                //}
                 // shift the distances for the next loop iteration
-                prev_dist2 = prev_dist1;
-                prev_dist1 = dist_com1;
+              //  prev_dist2 = prev_dist1;
+              //  prev_dist1 = dist_com1;
             }
 
             n++;
