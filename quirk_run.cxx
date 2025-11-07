@@ -225,65 +225,86 @@ void initializeFieldMaps()
     std::string export_dir = "./ExportedMagneticFields";
     std::vector<std::string> magnet_types = {"MainDipole", "D1", "D2", "InnerQuad", "RevInnerQuad"};
     const int max_retries = 5;  
-    const int retry_delay_seconds = 2;  
+    const int retry_delay_seconds = 2;
 
+    // Define expected magnet counts for each type
+    std::map<std::string, int> expected_counts = {
+        {"MainDipole", 6},
+        {"D1", 6},
+        {"D2", 1},
+        {"InnerQuad", 2},
+        {"RevInnerQuad", 2}
+    };
+
+    // First pass: validate ALL files exist
+    std::cout << "Validating magnetic field files...\n";
     for (const auto &magnet_type : magnet_types)
     {
-        std::string type_dir = export_dir + "/" + magnet_type;
-
-        size_t file_count = 0;
-        for (const auto &entry : std::filesystem::directory_iterator(type_dir))
-        {
-            if (entry.path().extension() == ".csv")
-            {
-                file_count++;
-            }
-        }
-
-        size_t magnet_idx = 1;
-        while (magnet_idx <= file_count)
+        int expected = expected_counts[magnet_type];
+        for (int idx = 1; idx <= expected; ++idx)
         {
             std::stringstream ss;
-            ss << type_dir << "/" << magnet_type << "_magnet_" << magnet_idx << ".csv";
+            ss << export_dir << "/" << magnet_type << "/" << magnet_type << "_magnet_" << idx << ".csv";
             std::string filepath = ss.str();
-
+            
             if (!std::filesystem::exists(filepath))
             {
-                std::cerr << "File does not exist: " << filepath << "\n";
-                break;
+                std::cerr << "FATAL ERROR: Required file missing: " << filepath << std::endl;
+                std::cerr << "Cannot proceed without all magnetic field files." << std::endl;
+                exit(1);
             }
+        }
+    }
+    std::cout << "All magnetic field files validated.\n";
+
+    // Second pass: load ALL files sequentially with retries
+    for (const auto &magnet_type : magnet_types)
+    {
+        int expected = expected_counts[magnet_type];
+        
+        for (int magnet_idx = 1; magnet_idx <= expected; ++magnet_idx)
+        {
+            std::stringstream ss;
+            ss << export_dir << "/" << magnet_type << "/" << magnet_type << "_magnet_" << magnet_idx << ".csv";
+            std::string filepath = ss.str();
 
             std::vector<Point> points;
             bool loaded = false;
 
+            // Retry loading up to max_retries times
             for (int attempt = 1; attempt <= max_retries; ++attempt)
             {
+                points.clear(); // Clear points before each attempt
+                
                 if (load_csv(filepath, points))
                 {
                     Magnet magnet(points);
                     all_magnets.push_back(std::move(magnet));
                     std::cout << "Successfully loaded and initialized KD-tree for " << filepath << "\n";
                     loaded = true;
-                    break;  
+                    break;
                 }
                 else
                 {
                     std::cerr << "Failed to load " << filepath << " (Attempt " << attempt << "/" << max_retries << ")\n";
                     if (attempt < max_retries)
                     {
-                      sleep(retry_delay_seconds);
+                        std::cerr << "Retrying in " << retry_delay_seconds << " seconds...\n";
+                        sleep(retry_delay_seconds);
                     }
                 }
             }
 
             if (!loaded)
             {
-                std::cerr << "Giving up on " << filepath << " after " << max_retries << " attempts.\n";
+                std::cerr << "FATAL ERROR: Failed to load " << filepath << " after " << max_retries << " attempts.\n";
+                std::cerr << "Magnetic field configuration is incomplete. Exiting.\n";
+                exit(1);
             }
-
-            magnet_idx++;
         }
     }
+    
+    std::cout << "All magnetic fields loaded successfully. Total magnets: " << all_magnets.size() << "\n";
 }
 
 
@@ -910,8 +931,6 @@ double SurvivalProb(double Epsilon, double Epsilon1, double Lambda_eV, double l2
 }
 
 
-// Put this near the top (after your helpers are declared so we can use
-// AddVectors/SubtractVectors/MultiplyVector/DivideVector/DotProduct/Normalize/Loct/CalculateForces)
 
 static inline void SyncQuirksToSameTime(
     double t_star,
@@ -949,7 +968,7 @@ static inline void SyncQuirksToSameTime(
     // location/material
     int loct = Loct(r[0], r[1], r[2]);
 
-    // deterministic force (same EOM parts you use elsewhere)
+   
     std::vector<double> F = CalculateForces(mq, Lambda, v, vperp, s, vperp0, vpar, loct, q, r);
 
     // trapezoidal update over dt
@@ -982,7 +1001,7 @@ int main(int argc, char *argv[])
 
     initializeFieldMaps();
 
-    double back = 472.76e6+0.75e6; //Start of calypso simulation in faser coords+.75m buffer. Default back value in micrometers (vetoNu0), faser z=0 at 477.76
+    double back = 472.76e6+1.0e6; //Start of calypso simulation in faser coords+.75m buffer. Default back value in micrometers (vetoNu0), faser z=0 at 477.76
     double Lambda = 500.0; // Default lambda value in eV
     std::string inputFileName;
     int seed = 0;        // random seed
