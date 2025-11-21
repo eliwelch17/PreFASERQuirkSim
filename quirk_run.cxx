@@ -1124,7 +1124,7 @@ int main(int argc, char *argv[])
                 p2[0], p2[1], p2[2]
             );
         }
-        decay_dist_stddev = DecayStandardDeviation(
+        double decay_dist_stddev = DecayStandardDeviation(
             Lambda,
             mq,
             p1[0], p1[1], p1[2], E1,
@@ -1161,6 +1161,12 @@ int main(int argc, char *argv[])
 
         double t1q = static_cast<double>(t1q_long);
 
+       
+        double beta_mag = std::sqrt(Beta[0]*Beta[0] + Beta[1]*Beta[1] + Beta[2]*Beta[2]);
+        const double c = 2.99792458e8;  
+        double distance_period = beta_mag * c * t1q * 1e-9;  // meters
+        std::cout<<"closest approach interval: " << distance_period << " m" << std::endl;
+
         double dt = std::min(0.03, t1q / divStep);
 
 
@@ -1178,7 +1184,7 @@ int main(int argc, char *argv[])
         int stepcount = 0;
         int n = 1;
         double lastSaveTime = 0;
-        double saveInterval = .01; // nano seconds
+        double saveInterval = .0001; // nano seconds
         double dx1pre = 0.0, dx2pre = 0.0;
 
         double prev_dist1 = std::numeric_limits<double>::max();
@@ -1186,13 +1192,13 @@ int main(int argc, char *argv[])
         double dist_com1min = std::numeric_limits<double>::max();
         bool foundMinimum = false;
      
-        double half_osc_length = 3e5 * t1q * Beta[2] / 2.0;
+        double half_osc_length = distance_period * 1e6;
         const double eps = 1e-9;
         const bool within_half = (back - front) <= (half_osc_length * (1.0 + eps));
         
         // Calculate the z-position of the second-to-last meeting point before back
-        // Meeting points occur every half_osc_length, so second-to-last is at back - half_osc_length
-        double second_to_last_meeting_z = back - 2* half_osc_length;
+        // Meeting points occur every osc_length, so second-to-last is at back - half_osc_length
+        double second_to_last_meeting_z = back - 1.5* half_osc_length;
         bool trackingMinimum = false;  // Flag to start tracking once past second-to-last meeting
 
 

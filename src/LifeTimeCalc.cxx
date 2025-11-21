@@ -1,5 +1,5 @@
 
-#include "include/LifeTimeCalc.h"
+#include "../include/LifeTimeCalc.h"
 
 void FourVector::boost(const std::array<double,3>& beta) {
     double b2 = beta[0]*beta[0] + beta[1]*beta[1] + beta[2]*beta[2];
@@ -52,9 +52,10 @@ double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double l
     // quirk models
     int ns = 0, nf = 1;
     double Qt = 1.0, NC = 1.0;
-    if (name == "s31") { ns=1; nf=0; Qt=1; }
-    if (name == "f33") { ns=0; nf=1; NC=3; Qt=2.0/3.0; }
-    if (name == "s33") { ns=1; nf=0; NC=3; Qt=2.0/3.0; }
+    if (name == "f31") { Qt = 1.0; }
+    else if (name == "s31") { ns=1; nf=0; Qt=1.0; }
+    else if (name == "f33") { ns=0; nf=1; NC=3; Qt=2.0/3.0; }
+    else if (name == "s33") { ns=1; nf=0; NC=3; Qt=2.0/3.0; }
 
     double b0 = (1.0/(4*M_PI))*((11.0/3.0)*Nic - (2.0/3.0)*nf - (1.0/6.0)*ns);
     double alpha_IC = 1.0 / (b0 * std::log(m*m / (Lambda_IC*Lambda_IC)));
@@ -62,7 +63,7 @@ double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double l
     double EL = 2*ec - 2*m;
     double T_gl = (4*std::sqrt(2*m)*((std::pow(EL,1.5)-std::pow(std::sqrt(m*Lambda_IC),1.5))
                  /(3*std::pow(Lambda_IC,3)*Epsilon))) * hbar;
-    double T_gc = (2*M_PI*alpha_IC*(std::sqrt(m)/std::pow(Lambda_IC,1.5)*Epsilon)
+    double T_gc = (2*M_PI*alpha_IC*(std::sqrt(m)/(std::pow(Lambda_IC,1.5)*Epsilon))
                  - (2*M_PI/(Epsilon*Lambda_IC))) * hbar;
 
     double T_el = ((3*(EL - std::sqrt(m*Lambda_IC))*m*m) /
