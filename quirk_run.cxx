@@ -17,11 +17,16 @@
 #include <utility>
 #include <sys/stat.h>
 #include <filesystem>
-#include "include/KDTree3D.h"
 #include <unistd.h> 
 #include <cstring> 
 #include <array>
 #include <map>
+
+
+
+#include "include/KDTree3D.h"
+#include "include/LifeTimeCalc.h"
+
 
 
 
@@ -839,98 +844,6 @@ std::vector<double> CalculateForcesWithGaus(double mq, double Lambda, const std:
 }
 
 
-//lifetime functions:
-struct FourVector {
-    double px, py, pz, e;
-    FourVector(double x=0, double y=0, double z=0, double E=0) : px(x), py(y), pz(z), e(E) {}
-
-    FourVector operator+(const FourVector& o) const {
-        return FourVector(px + o.px, py + o.py, pz + o.pz, e + o.e);
-    }
-
-    std::array<double,3> boost_vector() const {
-        return {-px / e, -py / e, -pz / e};
-    }
-
-    void boost(const std::array<double,3>& beta) {
-        double b2 = beta[0]*beta[0] + beta[1]*beta[1] + beta[2]*beta[2];
-        double gamma = 1.0 / std::sqrt(1.0 - b2);
-        double bp = beta[0]*px + beta[1]*py + beta[2]*pz;
-        double factor = (gamma - 1.0) * bp / b2 - gamma * e;
-        px += factor * beta[0];
-        py += factor * beta[1];
-        pz += factor * beta[2];
-        e  = gamma * (e - bp);
-    }
-};
-
-FourVector Boost_lab_to_com(double p1x,double p1y,double p1z,double e1,
-                            double p2x,double p2y,double p2z,double e2)
-{
-    FourVector v1(p1x,p1y,p1z,e1);
-    FourVector v2(p2x,p2y,p2z,e2);
-    FourVector tot = v1 + v2;
-    auto b = tot.boost_vector();
-    v1.boost({-b[0], -b[1], -b[2]});
-    return v1;
-}
-
-//probability to survive beyond l2
-double SurvivalProb(double Epsilon, double Epsilon1, double Lambda_eV, double l2, double m, const std::string& name,
-                    double p1x, double p1y, double p1z,
-                    double p2x, double p2y, double p2z)
-{
-    const double hbar = 6.5821e-25; // GeV*s
-    const double c = 2.99792458e8;  // m/s
-    const double alpha_EM = 1.0 / 137.0;
-    const double Nic = 2.0;
-    const double eV_to_GeV = 1e-9;
-    double Lambda_IC = Lambda_eV * eV_to_GeV; 
-
-    double e1 = std::sqrt(p1x*p1x + p1y*p1y + p1z*p1z + m*m);
-    double e2 = std::sqrt(p2x*p2x + p2y*p2y + p2z*p2z + m*m);
-    FourVector com = Boost_lab_to_com(p1x,p1y,p1z,e1,p2x,p2y,p2z,e2);
-
-    double plx = p1x + p2x;
-    double ply = p1y + p2y;
-    double plz = p1z + p2z;
-    double kl = std::sqrt(plx*plx + ply*ply + plz*plz);
-    double kc = std::sqrt(com.px*com.px + com.py*com.py + com.pz*com.pz);
-
-    double el = std::sqrt(kl*kl + (2*m)*(2*m));
-    double ec = std::sqrt(kc*kc + m*m);
-    double v = std::fabs(kl / el) * c;
-
-    // quirk models
-    int ns = 0, nf = 1;
-    double Qt = 1.0, NC = 1.0;
-    if (name == "s31") { ns=1; nf=0; Qt=1; }
-    if (name == "f33") { ns=0; nf=1; NC=3; Qt=2.0/3.0; }
-    if (name == "s33") { ns=1; nf=0; NC=3; Qt=2.0/3.0; }
-
-    double b0 = (1.0/(4*M_PI))*((11.0/3.0)*Nic - (2.0/3.0)*nf - (1.0/6.0)*ns);
-    double alpha_IC = 1.0 / (b0 * std::log(m*m / (Lambda_IC*Lambda_IC)));
-
-    double EL = 2*ec - 2*m;
-    double T_gl = (4*std::sqrt(2*m)*((std::pow(EL,1.5)-std::pow(std::sqrt(m*Lambda_IC),1.5))
-                 /(3*std::pow(Lambda_IC,3)*Epsilon))) * hbar;
-    double T_gc = (2*M_PI*alpha_IC*(std::sqrt(m)/std::pow(Lambda_IC,1.5)*Epsilon)
-                 - (2*M_PI/(Epsilon*Lambda_IC))) * hbar;
-
-    double T_el = ((3*(EL - std::sqrt(m*Lambda_IC))*m*m) /
-                  (16*Qt*Qt*M_PI*alpha_EM*std::pow(Lambda_IC,4))) * hbar;
-    double T_ec = ((alpha_IC*alpha_IC*m*m) /
-                  (16*Qt*Qt*M_PI*alpha_EM*std::pow(Lambda_IC,3))
-                  - (1.0 / (16*Qt*Qt*M_PI*alpha_EM*std::pow(alpha_IC,4)*m))) * hbar;
-
-    double t00 = (1.0 / (1.0/T_gl + 1.0/T_el)) + (1.0 / (1.0/T_gc + 1.0/T_ec));
-    double tau_lab = t00 / std::sqrt(1 - (v*v)/(c*c));
-
-    // survival probability beyond l2
-    double P_survive = std::exp(-l2 / (v * tau_lab));
-    return P_survive;
-}
-
 
 
 static inline void SyncQuirksToSameTime(
@@ -1001,8 +914,8 @@ int main(int argc, char *argv[])
 {
 
     initializeFieldMaps();
-
-    double back = 472.76e6+1.0e6; //Start of calypso simulation in faser coords+.75m buffer. Default back value in micrometers (vetoNu0), faser z=0 at 477.76
+   
+    double back = 474.6e6-0.2e6; //Vetonu scintillatorin faser coords-.2m buffer. Default back value in micrometers (vetoNu0), faser z=0 at 477.76
     double Lambda = 500.0; // Default lambda value in eV
     std::string inputFileName;
     int seed = 0;        // random seed
@@ -1013,7 +926,7 @@ int main(int argc, char *argv[])
     int runNum = 0;
     double front = 19e6; // in micrometers
     double beta_cutOff = 0.1; // minimum beta to continue simulating
-    double back_cutoff = 474.6e6; //  location of vetoNu0
+ 
 
     for (int i = 1; i < argc; ++i)
     {
@@ -1198,9 +1111,9 @@ int main(int argc, char *argv[])
         double l2 = 474.64 + 5.78;    // preshower1  distance from ip
         std::string model = "f31";      // fermionic colorless model
 
-        double p_surv[3];
+        double decay_dist[3];
         for (int i = 0; i < 3; ++i) {
-            p_surv[i] = SurvivalProb(
+            decay_dist[i] = DecayDistance(
                 epsilons[i],
                 epsilon1,
                 Lambda,    // Lambda in eV
@@ -1211,6 +1124,12 @@ int main(int argc, char *argv[])
                 p2[0], p2[1], p2[2]
             );
         }
+        decay_dist_stddev = DecayStandardDeviation(
+            Lambda,
+            mq,
+            p1[0], p1[1], p1[2], E1,
+            p2[0], p2[1], p2[2], E2
+        );
 
      
 
@@ -1270,6 +1189,11 @@ int main(int argc, char *argv[])
         double half_osc_length = 3e5 * t1q * Beta[2] / 2.0;
         const double eps = 1e-9;
         const bool within_half = (back - front) <= (half_osc_length * (1.0 + eps));
+        
+        // Calculate the z-position of the second-to-last meeting point before back
+        // Meeting points occur every half_osc_length, so second-to-last is at back - half_osc_length
+        double second_to_last_meeting_z = back - 2* half_osc_length;
+        bool trackingMinimum = false;  // Flag to start tracking once past second-to-last meeting
 
 
         // main step loop
@@ -1409,7 +1333,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (stepcount % 10000 == 0)
+            if (stepcount % 100000 == 0)
             {
                 std::cout << "r1: " << r1[0] << " " << r1[1] << " " << r1[2] << std::endl;
                 std::cout << "r2: " << r2[0] << " " << r2[1] << " " << r2[2] << std::endl;
@@ -1421,57 +1345,81 @@ int main(int argc, char *argv[])
             double dist_com1 = sqrt((r1[0] - com[0]) * (r1[0] - com[0]) + (r1[1] - com[1]) * (r1[1] - com[1]) + (r1[2] - com[2]) * (r1[2] - com[2]));
             double dist_com2 = sqrt((r2[0] - com[0]) * (r2[0] - com[0]) + (r2[1] - com[1]) * (r2[1] - com[1]) + (r2[2] - com[2]) * (r2[2] - com[2]));
 
+            // Calculate direct distance between quirks
+            double dist_between_quirks = sqrt((r1[0] - r2[0]) * (r1[0] - r2[0]) + (r1[1] - r2[1]) * (r1[1] - r2[1]) + (r1[2] - r2[2]) * (r1[2] - r2[2]));
 
             //Here we check the end of sim conditions
-            //there are 2 ways we end:
-            //1) we start far from back in which case we end once the quirks have their closest min to back
-            //2) we start close t oback in which case we end right where they start as the quirks are already started on the closest min
+            //Find the closest minimum before back by:
+            //1) Starting to track once past the second-to-last meeting point (using OR for z position)
+            //2) Detecting when we've passed the minimum (distance increases after decreasing)
+            //3) Stopping at that minimum
+            //back is a hard cutoff - if either quirk reaches it, stop immediately
 
-
-            //if (r1[2] >= back - (half_osc_length*1.0) || r2[2] >= back - (half_osc_length*1.0))
-            //to ensure we can simulate in calypso just cut off at back
-            if (r1[2] >= back  || r2[2] >= back )
-
-            { 
-
+            // Hard cutoff: if either quirk reaches back, stop immediately
+            if (r1[2] >= back || r2[2] >= back)
+            {
                 double t_star = (t1 > t2) ? t1 : t2;
                 SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
 
-                                
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> duration = end - start;
+                std::cout << "Reached back (hard cutoff), stopping" << std::endl;
+                std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
-                        
-                
-                // begin tracking once past back
+                outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
+                           << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << "\n";
+                outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
+                           << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << "\n";
 
-               
-                // track minimum distance
-                //if (dist_com1 < dist_com1min)
-               // {
-                    //dist_com1min = dist_com1;
-                //}
+                break;
+            }
 
-                // check if we've encountered a local minimum
-                //if ((r1[2] >= back  || r2[2] >= back ) ||within_half||((prev_dist2 != std::numeric_limits<double>::max() && dist_com1 > prev_dist1 && prev_dist1 < prev_dist2) &&(r1[2] >= back_cutoff || r2[2] >= back_cutoff)))
+            // Check if we've passed the second-to-last meeting point and start tracking (using OR)
+            if (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z))
+            {
+                trackingMinimum = true;
+                dist_com1min = dist_between_quirks;
+                prev_dist1 = dist_between_quirks;
+                prev_dist2 = std::numeric_limits<double>::max();
+            }
 
-                //{
-                   // foundMinimum = true;
-                  
+            // If tracking, update minimum distance and check if we've passed the minimum
+            if (trackingMinimum)
+            {
+                // Update minimum if current distance is smaller
+                if (dist_between_quirks < dist_com1min)
+                {
+                    dist_com1min = dist_between_quirks;
+                }
 
-                    //std::cout << "Minimum distance found at z = " << r1[2] << " with distance: " << dist_com1min << std::endl;
+                // Check if we've passed the minimum: distance was decreasing (prev_dist1 < prev_dist2) 
+                // and now is increasing (dist_between_quirks > prev_dist1)
+                if (prev_dist2 != std::numeric_limits<double>::max() && 
+                    prev_dist1 < prev_dist2 && 
+                    dist_between_quirks > prev_dist1)
+                {
+                    // We've passed the minimum - stop here
+                    foundMinimum = true;
+
+                    double t_star = (t1 > t2) ? t1 : t2;
+                    SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
+
                     auto end = std::chrono::high_resolution_clock::now();
                     std::chrono::duration<double> duration = end - start;
+                    std::cout << "Minimum distance found at z = " << r1[2] << " (r1), " << r2[2] << " (r2) with distance: " << dist_com1min << std::endl;
                     std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
                     outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                               << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << p_surv[0] << " " << p_surv[1] << " " << p_surv[2] << "\n";
+                               << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
                     outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                               << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << p_surv[0] << " " << p_surv[1] << " " << p_surv[2] << "\n";
+                               << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
 
                     break;
-                //}
-                // shift the distances for the next loop iteration
-              //  prev_dist2 = prev_dist1;
-              //  prev_dist1 = dist_com1;
+                }
+
+                // Shift the distances for the next loop iteration
+                prev_dist2 = prev_dist1;
+                prev_dist1 = dist_between_quirks;
             }
 
             n++;
