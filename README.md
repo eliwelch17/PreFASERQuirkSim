@@ -9,7 +9,7 @@ In an attempt to make this as simple as possible for those who may use this (inc
     g++ v7 or later (check: g++ --version), c++17
 
 ## Compile: 
-    g++ -std=c++17 -o quirk_run quirk_run.cxx src/KDTree3D.cxx
+    g++ -std=c++17 -o quirk_run quirk_run.cxx src/*
 
 ## Usage: 
     
