@@ -1365,7 +1365,7 @@ int main(int argc, char *argv[])
            
 
             // Check if we've passed the second-to-last meeting point and start tracking (using OR)
-            if (within_half || (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z)))
+            if ((!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z)))
             {
                 trackingMinimum = true;
                 dist_com1min = dist_between_quirks;
