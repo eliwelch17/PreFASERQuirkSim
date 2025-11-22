@@ -1362,26 +1362,10 @@ int main(int argc, char *argv[])
             //back is a hard cutoff - if either quirk reaches it, stop immediately
 
             // Hard cutoff: if either quirk reaches back, stop immediately
-            if (r1[2] >= back || r2[2] >= back)
-            {
-                double t_star = (t1 > t2) ? t1 : t2;
-                SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
-
-                auto end = std::chrono::high_resolution_clock::now();
-                std::chrono::duration<double> duration = end - start;
-                std::cout << "Reached back (hard cutoff), stopping" << std::endl;
-                std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
-
-                outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                           << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << "\n";
-                outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                           << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << "\n";
-
-                break;
-            }
+           
 
             // Check if we've passed the second-to-last meeting point and start tracking (using OR)
-            if (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z))
+            if (within_half || (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z)))
             {
                 trackingMinimum = true;
                 dist_com1min = dist_between_quirks;
@@ -1390,7 +1374,7 @@ int main(int argc, char *argv[])
             }
 
             // If tracking, update minimum distance and check if we've passed the minimum
-            if (trackingMinimum)
+            if (within_half || trackingMinimum || (r1[2] >= back || r2[2] >= back))
             {
                 // Update minimum if current distance is smaller
                 if (dist_between_quirks < dist_com1min)
@@ -1400,9 +1384,7 @@ int main(int argc, char *argv[])
 
                 // Check if we've passed the minimum: distance was decreasing (prev_dist1 < prev_dist2) 
                 // and now is increasing (dist_between_quirks > prev_dist1)
-                if (prev_dist2 != std::numeric_limits<double>::max() && 
-                    prev_dist1 < prev_dist2 && 
-                    dist_between_quirks > prev_dist1)
+                if (within_half || (r1[2] >= back || r2[2] >= back) || (prev_dist2 != std::numeric_limits<double>::max() && prev_dist1 < prev_dist2 && dist_between_quirks > prev_dist1))
                 {
                     // We've passed the minimum - stop here
                     foundMinimum = true;
