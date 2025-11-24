@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <random>
+#include <deque>
+#include <deque>
 #include <functional>
 #include <iomanip>
 #include <string>
@@ -1191,6 +1193,13 @@ int main(int argc, char *argv[])
         double prev_dist2 = std::numeric_limits<double>::max();
         double dist_com1min = std::numeric_limits<double>::max();
         bool foundMinimum = false;
+        std::deque<double> dist_window;
+        struct Snapshot
+        {
+            std::vector<double> r1, r2, p1, p2;
+            double t1, t2;
+        };
+        std::deque<Snapshot> state_window;
      
         double half_osc_length = distance_period * 1e6;
         const double eps = 1e-9;
@@ -1200,6 +1209,7 @@ int main(int argc, char *argv[])
         // Meeting points occur every osc_length, so second-to-last is at back - half_osc_length
         double second_to_last_meeting_z = back - 1.5* half_osc_length;
         bool trackingMinimum = false;  // Flag to start tracking once past second-to-last meeting
+        int stepsSinceTrackingStart = 0;
 
 
         // main step loop
@@ -1354,6 +1364,10 @@ int main(int argc, char *argv[])
             // Calculate direct distance between quirks
             double dist_between_quirks = sqrt((r1[0] - r2[0]) * (r1[0] - r2[0]) + (r1[1] - r2[1]) * (r1[1] - r2[1]) + (r1[2] - r2[2]) * (r1[2] - r2[2]));
 
+            
+
+          
+
             //Here we check the end of sim conditions
             //Find the closest minimum before back by:
             //1) Starting to track once past the second-to-last meeting point (using OR for z position)
@@ -1365,13 +1379,26 @@ int main(int argc, char *argv[])
            
 
             // Check if we've passed the second-to-last meeting point and start tracking (using OR)
-            if ((!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z)))
+            if (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z))
             {
                 trackingMinimum = true;
                 dist_com1min = dist_between_quirks;
                 prev_dist1 = dist_between_quirks;
                 prev_dist2 = std::numeric_limits<double>::max();
             }
+
+            if (trackingMinimum)
+            {
+                dist_window.push_back(dist_between_quirks);
+                state_window.push_back({r1,r2,p1,p2,t1,t2});
+
+                if (dist_window.size() > 5) {
+                    dist_window.pop_front();
+                    state_window.pop_front();
+                }
+
+            }
+            
 
             // If tracking, update minimum distance and check if we've passed the minimum
             if (within_half || trackingMinimum || (r1[2] >= back || r2[2] >= back))
@@ -1381,13 +1408,48 @@ int main(int argc, char *argv[])
                 {
                     dist_com1min = dist_between_quirks;
                 }
+             
 
-                // Check if we've passed the minimum: distance was decreasing (prev_dist1 < prev_dist2) 
-                // and now is increasing (dist_between_quirks > prev_dist1)
-                if (within_half || (r1[2] >= back || r2[2] >= back) || (prev_dist2 != std::numeric_limits<double>::max() && prev_dist1 < prev_dist2 && dist_between_quirks > prev_dist1))
+                
+                Snapshot minSnapshot;
+               
+                if (trackingMinimum && dist_window.size() >= 5)
+                {
+                    double d0 = dist_window[0];
+                    double d1 = dist_window[1];
+                    double d2 = dist_window[2];
+                    double d3 = dist_window[3];
+                    double d4 = dist_window[4];
+
+                    // average slopes 
+                    double slopeBefore = 0.5*((d2 - d1) + (d1 - d0));
+                    double slopeAfter  = 0.5*((d4 - d3) + (d3 - d2));
+
+                    bool isMin = (slopeBefore < 0) && (slopeAfter > 0);
+
+                    if (isMin) {
+                        minSnapshot = state_window[2];
+                        dist_com1min = d2;
+                        foundMinimum = true;
+                    }
+                }
+
+
+                // Check if we've passed the minimum based on averages or hard cutoffs
+                if (within_half || (r1[2] >= back || r2[2] >= back) || foundMinimum)
                 {
                     // We've passed the minimum - stop here
-                    foundMinimum = true;
+                    
+
+                    if (foundMinimum)
+                    {
+                        r1 = minSnapshot.r1;
+                        r2 = minSnapshot.r2;
+                        p1 = minSnapshot.p1;
+                        p2 = minSnapshot.p2;
+                        t1 = minSnapshot.t1;
+                        t2 = minSnapshot.t2;
+                    }
 
                     double t_star = (t1 > t2) ? t1 : t2;
                     SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
@@ -1408,6 +1470,8 @@ int main(int argc, char *argv[])
                 // Shift the distances for the next loop iteration
                 prev_dist2 = prev_dist1;
                 prev_dist1 = dist_between_quirks;
+
+               
             }
 
             n++;
