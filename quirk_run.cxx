@@ -1223,6 +1223,7 @@ int main(int argc, char *argv[])
         int stepsSinceTrackingStart = 0;
         int deque_size = static_cast<int>(divStep * window_factor);  // Deque size based on divStep
         int trajectory_steps_written = 0;  // Track how many trajectory points we've written
+        bool shouldSave = false;  // Only save if we hit back or within_half, not if too slow/transverse
 
 
         // main step loop
@@ -1408,12 +1409,14 @@ int main(int argc, char *argv[])
             // Only break if within_half (separate pathway) - output done after loop
             if (within_half)
             {
+                shouldSave = true;
                 break;
             }
             
             // Break if we hit back (not within_half) - will search deque after loop
             if (!within_half && (r1[2] >= back || r2[2] >= back))
             {
+                shouldSave = true;
                 break;
             }
 
@@ -1473,28 +1476,35 @@ int main(int argc, char *argv[])
                 trajOut.close();
             }
         }
-        
-        // Sync and output (for both within_half and deque cases)
+
+
         double t_star = (t1 > t2) ? t1 : t2;
         SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duration = end - start;
+
         // Calculate distance at closest approach point
         double dist_at_closest = sqrt((r1[0] - r2[0]) * (r1[0] - r2[0]) + (r1[1] - r2[1]) * (r1[1] - r2[1]) + (r1[2] - r2[2]) * (r1[2] - r2[2]));
         std::cout << "Closest approach found at z = " << r1[2] << " (r1), " << r2[2] << " (r2) with distance: " << dist_at_closest << " and momentum diff (COM): " << momentum_diff_max << std::endl;
         std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
 
+
+        
+        if (shouldSave){
+        // Sync and output (for both within_half and deque cases)
+    
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
                    << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
                    << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
-        
+        }
         // Debug: why did loop exit?
         double final_beta = sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]);
         double final_trans = sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2));
         std::cout << "DEBUG: Loop exited. beta=" << final_beta << " (cutoff=" << beta_cutOff << "), trans_dist=" << final_trans << " (limit=1.5e6)" << std::endl;
         std::cout << h << std::endl;
+      
     }
 
     inputFile.close();
