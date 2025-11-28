@@ -702,6 +702,18 @@ inline std::vector<double> Normalize(const std::vector<double>& v){
 }
 
 
+std::vector<double> BoostToCOM(const std::vector<double>& p, double E, const std::vector<double>& Beta) {
+    double beta_sq = DotProduct(Beta, Beta);
+    if (beta_sq < 1e-15) {
+        return p;
+    }
+    double gamma = 1.0 / std::sqrt(1.0 - beta_sq);
+    double p_dot_beta = DotProduct(p, Beta);
+    std::vector<double> p_COM = AddVectors(p, MultiplyVector(Beta, (gamma - 1.0) * p_dot_beta / beta_sq - gamma * E));
+    return p_COM;
+}
+
+
 
 // Function to calculate the value of ct
 double CalculateCt(const std::vector<double> &v, const std::vector<double> &Beta, const std::vector<double> &r1, const std::vector<double> &r2, const std::vector<double> &F, double E1, double E2)
@@ -1186,18 +1198,16 @@ int main(int argc, char *argv[])
         int stepcount = 0;
         int n = 1;
         double lastSaveTime = 0;
-        double saveInterval = .0001; // nano seconds
+        double saveInterval = .01; // nano seconds
         double dx1pre = 0.0, dx2pre = 0.0;
 
-        double prev_dist1 = std::numeric_limits<double>::max();
-        double prev_dist2 = std::numeric_limits<double>::max();
-        double dist_com1min = std::numeric_limits<double>::max();
-        bool foundMinimum = false;
-        std::deque<double> dist_window;
+        double momentum_diff_max = 0.0;  // Maximum momentum difference in COM frame
+        std::deque<double> momentum_diff_window;  // Store momentum differences in COM frame
         struct Snapshot
         {
             std::vector<double> r1, r2, p1, p2;
             double t1, t2;
+            int trajectory_lines;  // Number of trajectory lines written up to this point
         };
         std::deque<Snapshot> state_window;
      
@@ -1207,9 +1217,12 @@ int main(int argc, char *argv[])
         
         // Calculate the z-position of the second-to-last meeting point before back
         // Meeting points occur every osc_length, so second-to-last is at back - half_osc_length
-        double second_to_last_meeting_z = back - 1.5* half_osc_length;
-        bool trackingMinimum = false;  // Flag to start tracking once past second-to-last meeting
+        double window_factor = 1.5;
+        double second_to_last_meeting_z = back - window_factor * half_osc_length;
+        bool trackingMinimum = false;  // Flag to start tracking once past second-to-last meeting (keep name for consistency)
         int stepsSinceTrackingStart = 0;
+        int deque_size = static_cast<int>(divStep * window_factor);  // Deque size based on divStep
+        int trajectory_steps_written = 0;  // Track how many trajectory points we've written
 
 
         // main step loop
@@ -1346,6 +1359,7 @@ int main(int argc, char *argv[])
                     *outputFileTrajectory << std::setprecision(16) << t1 << " " << r1[0] << " " << r1[1] << " " << r1[2] << " " << "\n";
                     *outputFileTrajectory << std::setprecision(16) << t1 << " " << r2[0] << " " << r2[1] << " " << r2[2] << " " << "\n";
                     lastSaveTime = t1;
+                    trajectory_steps_written += 2;  // Two lines per step (r1 and r2)
                 }
             }
 
@@ -1357,125 +1371,129 @@ int main(int argc, char *argv[])
             }
 
 
-            std::vector<double> com = {(r1[0] + r2[0]) / 2, (r1[1] + r2[1]) / 2, (r1[2] + r2[2]) / 2};
-            double dist_com1 = sqrt((r1[0] - com[0]) * (r1[0] - com[0]) + (r1[1] - com[1]) * (r1[1] - com[1]) + (r1[2] - com[2]) * (r1[2] - com[2]));
-            double dist_com2 = sqrt((r2[0] - com[0]) * (r2[0] - com[0]) + (r2[1] - com[1]) * (r2[1] - com[1]) + (r2[2] - com[2]) * (r2[2] - com[2]));
-
-            // Calculate direct distance between quirks
-            double dist_between_quirks = sqrt((r1[0] - r2[0]) * (r1[0] - r2[0]) + (r1[1] - r2[1]) * (r1[1] - r2[1]) + (r1[2] - r2[2]) * (r1[2] - r2[2]));
-
-            
-
-          
-
-            //Here we check the end of sim conditions
-            //Find the closest minimum before back by:
-            //1) Starting to track once past the second-to-last meeting point (using OR for z position)
-            //2) Detecting when we've passed the minimum (distance increases after decreasing)
-            //3) Stopping at that minimum
-            //back is a hard cutoff - if either quirk reaches it, stop immediately
-
-            // Hard cutoff: if either quirk reaches back, stop immediately
-           
+            // Calculate momentum difference in COM frame
+            // Boost momenta to COM frame and calculate |p1_COM - p2_COM|
+            std::vector<double> p1_COM = BoostToCOM(p1, E1, Beta);
+            std::vector<double> p2_COM = BoostToCOM(p2, E2, Beta);
+            std::vector<double> p_diff = SubtractVectors(p1_COM, p2_COM);
+            double momentum_diff = sqrt(DotProduct(p_diff, p_diff));  // |p1_COM - p2_COM|
 
             // Check if we've passed the second-to-last meeting point and start tracking (using OR)
             if (!trackingMinimum && (r1[2] >= second_to_last_meeting_z || r2[2] >= second_to_last_meeting_z))
             {
                 trackingMinimum = true;
-                dist_com1min = dist_between_quirks;
-                prev_dist1 = dist_between_quirks;
-                prev_dist2 = std::numeric_limits<double>::max();
+                momentum_diff_max = momentum_diff;
             }
 
             if (trackingMinimum)
             {
-                dist_window.push_back(dist_between_quirks);
-                state_window.push_back({r1,r2,p1,p2,t1,t2});
+                momentum_diff_window.push_back(momentum_diff);
+                state_window.push_back({r1,r2,p1,p2,t1,t2,trajectory_steps_written});
 
-                if (dist_window.size() > 5) {
-                    dist_window.pop_front();
+                if (momentum_diff_window.size() > deque_size) {
+                    momentum_diff_window.pop_front();
                     state_window.pop_front();
                 }
-
             }
             
-
-            // If tracking, update minimum distance and check if we've passed the minimum
-            if (within_half || trackingMinimum || (r1[2] >= back || r2[2] >= back))
+            // Update maximum momentum difference while tracking
+            if (trackingMinimum)
             {
-                // Update minimum if current distance is smaller
-                if (dist_between_quirks < dist_com1min)
+                if (momentum_diff > momentum_diff_max)
                 {
-                    dist_com1min = dist_between_quirks;
+                    momentum_diff_max = momentum_diff;
                 }
-             
+            }
 
-                
-                Snapshot minSnapshot;
-               
-                if (trackingMinimum && dist_window.size() >= 5)
-                {
-                    double d0 = dist_window[0];
-                    double d1 = dist_window[1];
-                    double d2 = dist_window[2];
-                    double d3 = dist_window[3];
-                    double d4 = dist_window[4];
-
-                    // average slopes 
-                    double slopeBefore = 0.5*((d2 - d1) + (d1 - d0));
-                    double slopeAfter  = 0.5*((d4 - d3) + (d3 - d2));
-
-                    bool isMin = (slopeBefore < 0) && (slopeAfter > 0);
-
-                    if (isMin) {
-                        minSnapshot = state_window[2];
-                        dist_com1min = d2;
-                        foundMinimum = true;
-                    }
-                }
-
-
-                // Check if we've passed the minimum based on averages or hard cutoffs
-                if (within_half || (r1[2] >= back || r2[2] >= back) || foundMinimum)
-                {
-                    // We've passed the minimum - stop here
-                    
-
-                    if (foundMinimum)
-                    {
-                        r1 = minSnapshot.r1;
-                        r2 = minSnapshot.r2;
-                        p1 = minSnapshot.p1;
-                        p2 = minSnapshot.p2;
-                        t1 = minSnapshot.t1;
-                        t2 = minSnapshot.t2;
-                    }
-
-                    double t_star = (t1 > t2) ? t1 : t2;
-                    SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
-
-                    auto end = std::chrono::high_resolution_clock::now();
-                    std::chrono::duration<double> duration = end - start;
-                    std::cout << "Minimum distance found at z = " << r1[2] << " (r1), " << r2[2] << " (r2) with distance: " << dist_com1min << std::endl;
-                    std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
-
-                    outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                               << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
-                    outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                               << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
-
-                    break;
-                }
-
-                // Shift the distances for the next loop iteration
-                prev_dist2 = prev_dist1;
-                prev_dist1 = dist_between_quirks;
-
-               
+            // Only break if within_half (separate pathway) - output done after loop
+            if (within_half)
+            {
+                break;
+            }
+            
+            // Break if we hit back (not within_half) - will search deque after loop
+            if (!within_half && (r1[2] >= back || r2[2] >= back))
+            {
+                break;
             }
 
             n++;
         }
+        
+        // After loop: if we hit back (not within_half), search deque for maximum momentum difference
+        Snapshot maxSnapshot;
+        if (!within_half && (r1[2] >= back || r2[2] >= back) && trackingMinimum && momentum_diff_window.size() > 0)
+        {
+            // Find maximum in deque
+            int maxIdx = 0;
+            double maxMomentumDiff = momentum_diff_window[0];
+            for (size_t i = 1; i < momentum_diff_window.size(); ++i) {
+                if (momentum_diff_window[i] > maxMomentumDiff) {
+                    maxMomentumDiff = momentum_diff_window[i];
+                    maxIdx = i;
+                }
+            }
+            maxSnapshot = state_window[maxIdx];
+            momentum_diff_max = maxMomentumDiff;
+            
+            // Restore to maximum momentum difference position (closest approach)
+            r1 = maxSnapshot.r1;
+            r2 = maxSnapshot.r2;
+            p1 = maxSnapshot.p1;
+            p2 = maxSnapshot.p2;
+            t1 = maxSnapshot.t1;
+            t2 = maxSnapshot.t2;
+            
+            // Truncate trajectory file to the point where maximum occurred
+            if (traj && outputFileTrajectory) {
+                if (outputFileTrajectory->is_open()) {
+                    outputFileTrajectory->close();
+                }
+                
+                std::string trajFileName = stem + "_" + lambdaStr + "eV_trajectory.txt";
+                std::ifstream trajIn(trajFileName);
+                std::vector<std::string> lines;
+                std::string line;
+                while (std::getline(trajIn, line)) {
+                    lines.push_back(line);
+                }
+                trajIn.close();
+                
+                // Keep only the first trajectory_lines from the maximum snapshot
+                int lines_to_keep = maxSnapshot.trajectory_lines;
+                if (lines_to_keep > 0 && lines_to_keep <= static_cast<int>(lines.size())) {
+                    lines.erase(lines.begin() + lines_to_keep, lines.end());
+                }
+                
+                // Write back truncated file
+                std::ofstream trajOut(trajFileName);
+                for (const auto& l : lines) {
+                    trajOut << l << "\n";
+                }
+                trajOut.close();
+            }
+        }
+        
+        // Sync and output (for both within_half and deque cases)
+        double t_star = (t1 > t2) ? t1 : t2;
+        SyncQuirksToSameTime(t_star, r1, p1, t1, q1, r2, p2, t2, q2, mq, Lambda);
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration = end - start;
+        // Calculate distance at closest approach point
+        double dist_at_closest = sqrt((r1[0] - r2[0]) * (r1[0] - r2[0]) + (r1[1] - r2[1]) * (r1[1] - r2[1]) + (r1[2] - r2[2]) * (r1[2] - r2[2]));
+        std::cout << "Closest approach found at z = " << r1[2] << " (r1), " << r2[2] << " (r2) with distance: " << dist_at_closest << " and momentum diff (COM): " << momentum_diff_max << std::endl;
+        std::cout << "Time taken: " << duration.count() << " seconds" << std::endl;
+
+        outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
+                   << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
+        outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
+                   << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
+        
+        // Debug: why did loop exit?
+        double final_beta = sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]);
+        double final_trans = sqrt(((r1[0] + r2[0]) / 2) * ((r1[0] + r2[0]) / 2) + ((r1[1] + r2[1]) / 2) * ((r1[1] + r2[1]) / 2));
+        std::cout << "DEBUG: Loop exited. beta=" << final_beta << " (cutoff=" << beta_cutOff << "), trans_dist=" << final_trans << " (limit=1.5e6)" << std::endl;
         std::cout << h << std::endl;
     }
 
