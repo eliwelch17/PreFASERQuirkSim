@@ -1127,25 +1127,15 @@ int main(int argc, char *argv[])
 
         double decay_dist[3];
         for (int i = 0; i < 3; ++i) {
-            decay_dist[i] = DecayDistance(
-                epsilons[i],
-                epsilon1,
-                Lambda,    // Lambda in eV
-                l2,
-                mq,        // GeV
-                model,
-                p1[0], p1[1], p1[2],
-                p2[0], p2[1], p2[2]
-            );
+            decay_dist[i] = DecayDistance(epsilons[i],epsilon1,Lambda,mq,model,p1[0], p1[1], p1[2],p2[0], p2[1], p2[2]);
         }
-        double decay_dist_stddev = DecayStandardDeviation(
-            Lambda,
-            mq,
-            p1[0], p1[1], p1[2], E1,
-            p2[0], p2[1], p2[2], E2
-        );
-
-     
+        
+        double decay_dist_stddev = DecayStandardDeviation(Lambda,mq,p1[0], p1[1], p1[2], E1,p2[0], p2[1], p2[2], E2);
+        
+        
+        double survival_prob1 = LifetimeSurvivalProbGauss(decay_dist[0],decay_dist_stddev,l2);
+        double survival_prob2 = LifetimeSurvivalProbGauss(decay_dist[1],decay_dist_stddev,l2);
+        double survival_prob3 = LifetimeSurvivalProbGauss(decay_dist[2],decay_dist_stddev,l2);
 
 
         std::vector<double> v1 = {p1[0] / E1, p1[1] / E1, p1[2] / E1};
@@ -1495,9 +1485,9 @@ int main(int argc, char *argv[])
         // Sync and output (for both within_half and deque cases)
     
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                   << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
+                   << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3 <<  "\n";
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                   << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << decay_dist[0] << " " << decay_dist[1] << " " << decay_dist[2] << " " << decay_dist_stddev << "\n";
+                   << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3 <<  "\n";
         }
         // Debug: why did loop exit?
         double final_beta = sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]);

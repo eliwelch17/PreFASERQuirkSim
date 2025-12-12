@@ -24,7 +24,7 @@ FourVector Boost_lab_to_com(double p1x,double p1y,double p1z,double e1,
 }
 
 //decay distance
-double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double l2, double m, const std::string& name,
+double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double m, const std::string& name,
                     double p1x, double p1y, double p1z,
                     double p2x, double p2y, double p2z)
 {
@@ -115,12 +115,12 @@ double DecayStandardDeviation(double Lambda_eV, double m,
     double E_over_2m = E_total / (2 * m);
     double gamma_term = E_over_2m*E_over_2m - 1.0 / (1.0 - beta_sq);
     if (gamma_term < 0) {
-        gamma_term = 0;  // Avoid negative square root
+        gamma_term = 0;  
     }
     double gamma_factor = std::sqrt(gamma_term);
     
     // t1q in nanoseconds, convert to seconds
-    // Lambda_eV is already in eV, so use it directly
+    // Lambda_eV is already in eV
     double t1q_ns = 658.0 * ((2.0 * m) / (Lambda_eV * Lambda_eV)) * gamma_factor;
     double t1q_seconds = t1q_ns * 1e-9;  // Convert nanoseconds to seconds
     
@@ -133,4 +133,26 @@ double DecayStandardDeviation(double Lambda_eV, double m,
     double std_dev_distance = v * std_dev_time;
     
     return std_dev_distance;
+}
+
+
+
+// All args in meters
+// returns P(L > Lcut) for L ~ N(mean, sigma^2)
+ double LifetimeSurvivalProbGauss(double mean,double sigma,double Lcut)
+{
+    // Bad sigma -> treat as step at mean
+    if (sigma <= 0.0 || !std::isfinite(sigma)) {
+        return (mean > Lcut) ? 1.0 : 0.0;
+    }
+
+    const double z   = (Lcut - mean) / sigma;
+    const double arg = z / std::sqrt(2.0);
+
+    // P(L > Lcut) = 0.5 * erfc( (Lcut - mean) / (sqrt(2)*sigma) )
+    double p = 0.5 * std::erfc(arg);
+
+    if (!std::isfinite(p)) p = 0.0;
+    p = std::max(0.0, std::min(1.0, p));
+    return p;
 }

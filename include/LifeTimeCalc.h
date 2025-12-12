@@ -20,15 +20,12 @@ struct FourVector {
     void boost(const std::array<double,3>& beta);
 };
 
-FourVector Boost_lab_to_com(double p1x, double p1y, double p1z, double e1,
-                            double p2x, double p2y, double p2z, double e2);
+FourVector Boost_lab_to_com(double p1x, double p1y, double p1z, double e1,double p2x, double p2y, double p2z, double e2);
 
-double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double l2, double m, const std::string& name,
-                    double p1x, double p1y, double p1z,
-                    double p2x, double p2y, double p2z);
+double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double m, const std::string& name,double p1x, double p1y, double p1z,double p2x, double p2y, double p2z);
 
-double DecayStandardDeviation(double Lambda_eV, double m,
-                         double p1x, double p1y, double p1z, double e1,
-                         double p2x, double p2y, double p2z, double e2);
+double DecayStandardDeviation(double Lambda_eV, double m,double p1x, double p1y, double p1z, double e1,double p2x, double p2y, double p2z, double e2);
 
+
+double LifetimeSurvivalProbGauss(double mean,double sigma,double Lcut);
 #endif // LIFETIME_CALC_H
