@@ -1137,6 +1137,13 @@ int main(int argc, char *argv[])
         double survival_prob2 = LifetimeSurvivalProbGauss(decay_dist[1],decay_dist_stddev,l2);
         double survival_prob3 = LifetimeSurvivalProbGauss(decay_dist[2],decay_dist_stddev,l2);
 
+        if (survival_prob1 == 0.0 &&survival_prob2 == 0.0 && survival_prob3 == 0.0)
+        {
+            std::cout << "Quirk pair " << h << " skipped due to all survival probabilities being 0.0" << std::endl;
+            continue;  // skip this quirk pair entirely
+            
+        }
+
 
         std::vector<double> v1 = {p1[0] / E1, p1[1] / E1, p1[2] / E1};
         std::vector<double> v2 = {p2[0] / E2, p2[1] / E2, p2[2] / E2};
