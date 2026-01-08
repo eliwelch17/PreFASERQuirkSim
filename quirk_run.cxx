@@ -1137,6 +1137,14 @@ int main(int argc, char *argv[])
         double survival_prob2 = LifetimeSurvivalProbGauss(decay_dist[1],decay_dist_stddev,l2);
         double survival_prob3 = LifetimeSurvivalProbGauss(decay_dist[2],decay_dist_stddev,l2);
 
+        // Per-event transverse smearing widths at tracker plane (micrometers), for the three epsilon points
+        double sigmaR[3];
+        for (int i = 0; i < 3; ++i) {
+            sigmaR[i] = SigmaR_um(epsilons[i], l2, Lambda, mq,
+                                  p1[0], p1[1], p1[2],
+                                  p2[0], p2[1], p2[2]);
+        }
+
         if (survival_prob1 == 0.0 &&survival_prob2 == 0.0 && survival_prob3 == 0.0)
         {
             std::cout << "Quirk pair " << h << " skipped due to all survival probabilities being 0.0" << std::endl;
@@ -1195,7 +1203,7 @@ int main(int argc, char *argv[])
         int stepcount = 0;
         int n = 1;
         double lastSaveTime = 0;
-        double saveInterval = .01; // nano seconds
+        double saveInterval = .001; // nano seconds
         double dx1pre = 0.0, dx2pre = 0.0;
 
         double momentum_diff_max = 0.0;  // Maximum momentum difference in COM frame
@@ -1492,9 +1500,13 @@ int main(int argc, char *argv[])
         // Sync and output (for both within_half and deque cases)
     
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 1 " << 1 << " " << t1 << " "
-                   << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count() << " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3 <<  "\n";
+                   << r1[0] << " " << r1[1] << " " << r1[2] << " " << p1[0] << " " << p1[1] << " " << p1[2] << " " << duration.count()
+                   << " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3
+                   << " " << sigmaR[0] << " " << sigmaR[1] << " " << sigmaR[2] << "\n";
         outputFile << std::setprecision(16) << h << " " << mq << " " << Lambda << " " << t1q << " 2 " << 1 << " " << t2 << " "
-                   << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()<< " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3 <<  "\n";
+                   << r2[0] << " " << r2[1] << " " << r2[2] << " " << p2[0] << " " << p2[1] << " " << p2[2] << " " << duration.count()
+                   << " " << survival_prob1 << " " << survival_prob2 << " " << survival_prob3
+                   << " " << sigmaR[0] << " " << sigmaR[1] << " " << sigmaR[2] << "\n";
         }
         // Debug: why did loop exit?
         double final_beta = sqrt(Beta[0] * Beta[0] + Beta[1] * Beta[1] + Beta[2] * Beta[2]);

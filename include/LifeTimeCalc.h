@@ -26,6 +26,13 @@ double DecayDistance(double Epsilon, double Epsilon1, double Lambda_eV, double m
 
 double DecayStandardDeviation(double Lambda_eV, double m,double p1x, double p1y, double p1z, double e1,double p2x, double p2y, double p2z, double e2);
 
+// RMS transverse deflection width at tracker plane for quirk-pair system, in micrometers
+// sigma_R(epsilon) = d * 0.34 * sqrt(epsilon * N_osc) * (Lambda / |p_tot|)
+// where N_osc = EL / Lambda (EL is total CoM kinetic energy), Lambda in eV input is converted internally.
+double SigmaR_um(double epsilon, double d_m, double Lambda_eV, double m,
+                 double p1x, double p1y, double p1z,
+                 double p2x, double p2y, double p2z);
+
 
 double LifetimeSurvivalProbGauss(double mean,double sigma,double Lcut);
 #endif // LIFETIME_CALC_H

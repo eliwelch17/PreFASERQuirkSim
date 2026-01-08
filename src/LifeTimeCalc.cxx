@@ -135,6 +135,47 @@ double DecayStandardDeviation(double Lambda_eV, double m,
     return std_dev_distance;
 }
 
+// sigma_R in micrometers (same length units as r1/r2 in quirk_run)
+double SigmaR_um(double epsilon, double d_m, double Lambda_eV, double m,
+                 double p1x, double p1y, double p1z,
+                 double p2x, double p2y, double p2z)
+{
+    // Convert Lambda to GeV for consistent dimensionless ratios with momenta/energies in GeV
+    const double eV_to_GeV = 1e-9;
+    const double Lambda_GeV = Lambda_eV * eV_to_GeV;
+    if (!(Lambda_GeV > 0.0) || !(d_m > 0.0) || !(epsilon > 0.0)) return 0.0;
+
+    // Lab total momentum magnitude |p(QQbar)| in GeV
+    const double ptx = p1x + p2x;
+    const double pty = p1y + p2y;
+    const double ptz = p1z + p2z;
+    const double p_tot = std::sqrt(ptx*ptx + pty*pty + ptz*ptz);
+    if (!(p_tot > 0.0)) return 0.0;
+
+    // Energies in GeV
+    const double e1 = std::sqrt(p1x*p1x + p1y*p1y + p1z*p1z + m*m);
+    const double e2 = std::sqrt(p2x*p2x + p2y*p2y + p2z*p2z + m*m);
+
+    // Boost one quirk to CoM to get CoM kinetic energy EL = 2*E_c - 2*m (GeV)
+    FourVector com = Boost_lab_to_com(p1x, p1y, p1z, e1, p2x, p2y, p2z, e2);
+    const double kc = std::sqrt(com.px*com.px + com.py*com.py + com.pz*com.pz);
+    const double ec = std::sqrt(kc*kc + m*m);
+    const double EL = 2.0*ec - 2.0*m;
+    if (!(EL > 0.0)) return 0.0;
+
+    // N_osc = EL / Lambda  (dimensionless)
+    const double Nosc = EL / Lambda_GeV;
+    if (!(Nosc > 0.0)) return 0.0;
+
+    // d in micrometers (quirk_run positions are in micrometers)
+    const double d_um = d_m * 1e6;
+
+    // sigma_R(ε) = d * 0.34 * sqrt( ε * Nosc ) * ( Lambda / |p_tot| )
+    const double sigma_um = d_um * 0.34 * std::sqrt(epsilon * Nosc) * (Lambda_GeV / p_tot);
+    if (!std::isfinite(sigma_um)) return 0.0;
+    return sigma_um;
+}
+
 
 
 // All args in meters
