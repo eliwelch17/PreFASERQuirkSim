@@ -56,7 +56,9 @@ In an attempt to make this as simple as possible for those who may use this (inc
 
    
 
+#High lambda ionizatoin loss
 
+For high-\(\Lambda\) runs where we start the simulation near `back` (skipping 0\(\rightarrow\)`front`), we correct the skipped material energy loss using **precomputed range tables** (Cu/concrete/rock). We compute an effective material path length (oscillation factor + TAS/TAN `Loct()` acceptance), look up the corresponding \(\beta\) drop, and apply it as a **common scale factor** to both quirks’ 3-momenta (preserving momentum sharing while slowing the pair).
 
 
 
