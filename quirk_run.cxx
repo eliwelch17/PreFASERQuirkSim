@@ -1661,13 +1661,6 @@ int main(int argc, char *argv[])
                                   p2[0], p2[1], p2[2]);
         }
 
-        if (survival_prob1 == 0.0 &&survival_prob2 == 0.0 && survival_prob3 == 0.0)
-        {
-            std::cout << "Quirk pair " << h << " skipped due to all survival probabilities being 0.0" << std::endl;
-            continue;  // skip this quirk pair entirely
-            
-        }
-
 
         std::vector<double> v1 = {p1[0] / E1, p1[1] / E1, p1[2] / E1};
         std::vector<double> v2 = {p2[0] / E2, p2[1] / E2, p2[2] / E2};
