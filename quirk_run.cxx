@@ -628,16 +628,38 @@ std::vector<double> EoxRock(double mq, int param, const std::vector<double> &v)
     return result;
 }
 
+static bool InTanCopper(double x, double y, double z)
+{
+//from : https://lss.fnal.gov/archive/test-fn/0000/fermilab-fn-0732.pdf
+    // tan copper  at z  140.5 m with two beam holes (vacuum)
+    if (abs(z - 140.5e6) >= 0.5e6)
+        return false;
+    if (abs(x) >= (0.094 / 2) * 1e6)
+        return false;
+    if (abs(y + (0.605 / 2 - 0.067) * 1e6) >= (0.605 / 2) * 1e6)
+        return false;
+
+    // beam holes: r = 25 mm, centers at y = +/-80 mm 
+    const double hole_r = 0.025e6;
+    const double hole_y = 0.08e6;
+    if (sqrt(x * x + (y - hole_y) * (y - hole_y)) < hole_r)
+        return false;
+    if (sqrt(x * x + (y + hole_y) * (y + hole_y)) < hole_r)
+        return false;
+
+    return true;
+}
+
 int Loct(double x, double y, double z)
 {
     // determine location region of quirks
     if ((((sqrt(x * x + y * y) > 0.017e6) && (abs(z - 19.9e6) < 0.9e6)) ||
-         ((abs(x) < (0.094 / 2) * 1e6) && (abs(y + (0.605 / 2 - 0.067) * 1e6) < (0.605 / 2) * 1e6) && (abs(z - 140.5e6) < 0.5e6)) ||
+         InTanCopper(x, y, z) ||
          (abs(z - 385.0e6) < 5.0e6) || (abs(z - 435.0e6) < 45.0e6)))
     {
         if ((sqrt(x * x + y * y) > 0.017e6) && (abs(z - 19.9e6) < 0.9e6))
             return 1;
-        if ((abs(x) < (0.094 / 2) * 1e6) && (abs(y + (0.605 / 2 - 0.067) * 1e6) < (0.605 / 2) * 1e6) && (abs(z - 140.5e6) < 0.5e6))
+        if (InTanCopper(x, y, z))
             return 2;
         if (abs(z - 385.0e6) < 5.0e6)
             return 3;
@@ -645,6 +667,87 @@ int Loct(double x, double y, double z)
             return 4;
     }
     return 0;
+}
+
+static inline void add_z_breakpoint(std::vector<double> &bp, double z, double z0, double z1)
+{
+    if (z > z0 && z < z1)
+        bp.push_back(z);
+}
+
+// analytic copper fraction along COM ray x=(bx/bz)*z, y=(by/bz)*z over [z0,z1]
+// used by within_half range table loss for TAS/TAN transverse acceptance
+static double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
+                                   double bx, double by, double bz)
+{
+    if (z1_um <= z0_um)
+        return 0.0;
+    if (loct_code != 1 && loct_code != 2)
+        return 1.0;
+
+    const double kx = bx / bz;
+    const double ky = by / bz;
+    const double k_perp = std::hypot(kx, ky);
+
+    std::vector<double> bp;
+    bp.reserve(16);
+    bp.push_back(z0_um);
+
+    if (loct_code == 1)
+    {
+        constexpr double R = 0.017e6;
+        if (k_perp > 0.0)
+            add_z_breakpoint(bp, R / k_perp, z0_um, z1_um);
+    }
+    else if (loct_code == 2)
+    {
+        const double half_x = (0.094 / 2) * 1e6;
+        const double half_y = (0.605 / 2) * 1e6;
+        const double y_off = (0.605 / 2 - 0.067) * 1e6;
+        const double hole_r = 0.025e6;
+        const double hole_y = 0.08e6;
+
+        auto add_linear = [&](double k, double val) {
+            if (std::abs(k) > 0.0)
+                add_z_breakpoint(bp, val / k, z0_um, z1_um);
+        };
+        add_linear(kx, half_x);
+        add_linear(kx, -half_x);
+        add_linear(ky, half_y - y_off);
+        add_linear(ky, -half_y - y_off);
+
+        auto add_circle = [&](double yc) {
+            const double A = kx * kx + ky * ky;
+            if (A <= 0.0)
+                return;
+            const double B = -2.0 * ky * yc;
+            const double C = yc * yc - hole_r * hole_r;
+            const double D = B * B - 4.0 * A * C;
+            if (D < 0.0)
+                return;
+            const double sd = std::sqrt(D);
+            add_z_breakpoint(bp, (-B - sd) / (2.0 * A), z0_um, z1_um);
+            add_z_breakpoint(bp, (-B + sd) / (2.0 * A), z0_um, z1_um);
+        };
+        add_circle(hole_y);
+        add_circle(-hole_y);
+    }
+
+    bp.push_back(z1_um);
+    std::sort(bp.begin(), bp.end());
+
+    double in_len = 0.0;
+    for (size_t i = 0; i + 1 < bp.size(); ++i)
+    {
+        const double za = bp[i];
+        const double zb = bp[i + 1];
+        if (zb <= za)
+            continue;
+        const double zm = 0.5 * (za + zb);
+        if (Loct(kx * zm, ky * zm, zm) == loct_code)
+            in_len += (zb - za);
+    }
+    return in_len / (z1_um - z0_um);
 }
 
 std::vector<double> Bct(double x, double y, double z)
@@ -1207,29 +1310,11 @@ static inline bool apply_range_table_loss(int mq_int,double mq,double Lambda_eV,
   const double cos_theta_z = Beta_z / Beta_mag; // Beta_z > 0 enforced above
   if (!(cos_theta_z > 0.0)) return false;
 
-  auto com_xy_at_z = [&](double z_um) -> std::pair<double, double> {
-    const double t = z_um / Beta_z;
-    return { t * Beta_pair[0], t * Beta_pair[1] };
-  };
-
-  auto fraction_in_loct = [&](int loct_code, double z0_um, double z1_um) -> double {
-    const int samples = 7;
-    if (z1_um <= z0_um) return 0.0;
-    int inside = 0;
-    for (int i = 0; i < samples; ++i) {
-      const double u = (i + 0.5) / samples;
-      const double z = z0_um + u * (z1_um - z0_um);
-      auto [x, y] = com_xy_at_z(z);
-      if (Loct(x, y, z) == loct_code) inside++;
-    }
-    return double(inside) / double(samples);
-  };
-
   struct Slab { double z0, z1; int loct; Material mat; };
   const Slab slabs[] = {
     // Match Loct() definitions
     {19.0e6, 20.8e6, 1, Material::Cu},        // TAS copper window
-    {140.0e6, 141.0e6, 2, Material::Cu},      // TAN copper window
+    {140.0e6, 141.0e6, 2, Material::Cu},      // TAN copper (two 25 mm holes at y=±80 mm)
     {380.0e6, 390.0e6, 3, Material::Cc},      // concrete
     {390.0e6, 480.0e6, 4, Material::Rock},    // rock
   };
@@ -1273,9 +1358,9 @@ static inline bool apply_range_table_loss(int mq_int,double mq,double Lambda_eV,
     if (z_end <= z_start) continue;
 
     double frac = 1.0;
-    // For TAS/TAN, apply transverse acceptance via Loct sampling
+    // For TAS/TAN
     if (s.loct == 1 || s.loct == 2) {
-      frac = fraction_in_loct(s.loct, z_start, z_end);
+      frac = fraction_in_loct_com(s.loct, z_start, z_end, Beta_pair[0], Beta_pair[1], Beta_z);
     }
     if (frac <= 0.0) continue;
 
@@ -1379,28 +1464,10 @@ static inline bool apply_range_table_loss_zspan(int mq_int,double mq,double Lamb
   const double cos_theta_z = Beta_z / Beta_mag;
   if (!(cos_theta_z > 0.0)) return false;
 
-  auto com_xy_at_z = [&](double z_um) -> std::pair<double, double> {
-    const double t = z_um / Beta_z;
-    return { t * Beta_pair[0], t * Beta_pair[1] };
-  };
-
-  auto fraction_in_loct = [&](int loct_code, double z0_um, double z1_um) -> double {
-    const int samples = 7;
-    if (z1_um <= z0_um) return 0.0;
-    int inside = 0;
-    for (int i = 0; i < samples; ++i) {
-      const double u = (i + 0.5) / samples;
-      const double z = z0_um + u * (z1_um - z0_um);
-      auto [x, y] = com_xy_at_z(z);
-      if (Loct(x, y, z) == loct_code) inside++;
-    }
-    return double(inside) / double(samples);
-  };
-
   struct Slab { double z0, z1; int loct; Material mat; };
   const Slab slabs[] = {
     {19.0e6, 20.8e6, 1, Material::Cu},
-    {140.0e6, 141.0e6, 2, Material::Cu},
+    {140.0e6, 141.0e6, 2, Material::Cu},      // TAN copper (two 25 mm holes at y=±80 mm)
     {380.0e6, 390.0e6, 3, Material::Cc},
     {390.0e6, 480.0e6, 4, Material::Rock},
   };
@@ -1411,7 +1478,8 @@ static inline bool apply_range_table_loss_zspan(int mq_int,double mq,double Lamb
     if (z1 <= z0) continue;
 
     double frac = 1.0;
-    if (s.loct == 1 || s.loct == 2) frac = fraction_in_loct(s.loct, z0, z1);
+    if (s.loct == 1 || s.loct == 2)
+      frac = fraction_in_loct_com(s.loct, z0, z1, Beta_pair[0], Beta_pair[1], Beta_z);
     if (frac <= 0.0) continue;
 
     const double dz_eff_um = (z1 - z0) * frac;
