@@ -33,7 +33,7 @@ int Loct(double x, double y, double z)
     // determine location region of quirks
     if ((((sqrt(x * x + y * y) > 0.017e6) && (abs(z - 19.9e6) < 0.9e6)) ||
          InTanCopper(x, y, z) ||
-         (abs(z - 385.0e6) < 5.0e6) || (abs(z - 435.0e6) < 45.0e6)))
+         (abs(z - 385.0e6) < 5.0e6) || (abs(z - 432.3e6) < 42.3e6)))
     {
         if ((sqrt(x * x + y * y) > 0.017e6) && (abs(z - 19.9e6) < 0.9e6))
             return 1;
@@ -41,7 +41,7 @@ int Loct(double x, double y, double z)
             return 2;
         if (abs(z - 385.0e6) < 5.0e6)
             return 3;
-        if (abs(z - 435.0e6) < 45.0e6)
+        if (abs(z - 432.3e6) < 42.3e6)
             return 4;
     }
     return 0;

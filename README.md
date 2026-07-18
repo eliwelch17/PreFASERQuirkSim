@@ -61,7 +61,7 @@ ionization energy loss. The modeled material regions are:
 - TAS copper from approximately `19.0 m` to `20.8 m`, outside its central 17 mm`-radius aperture
 - TAN copper from approximately `140.0 m` to `141.0 m`, including its transverse geometry and two `25 mm`-radius beam holes centred at `y = +/-80 mm`
 - Concrete from `380 m` to `390 m`
-- Rock from `390 m` to `480 m`
+- Rock from `390 m` to `474.6 m`
 
 The deterministic stopping-power calculation is first used to estimate the
 distance travelled during the step. The force is then recalculated with a
@@ -90,6 +90,10 @@ used during normal transport. It calculates an effective path length using the
 oscillation factor and TAS/TAN `Loct()` acceptance, obtains the corresponding
 beta reduction, and applies a common scale factor to both quirks' three-momenta.
 This preserves their momentum sharing while slowing the pair.
+
+## Lifetime and Radiation Estimates
+
+Each output row includes lifetime survival weights and RMS transverse-deflection widths at the first preshower plane (`480.42 m`). Both are calculated for infracolor-gluon radiation probabilities of `epsilon = 0.07, 0.10, 0.13`, giving a central value of `0.10` per oscillation with a `+/-30%` variation. These hard-coded values can be changed in `quirk_run.cxx`; epsilon affects the reported weights and widths but does not alter the transported trajectory. Applying the lifetime as an event weight, rather than modeling decays at each transport step, is a good approximation because the decay-distance distribution is much narrower than the flight distance to FASER. Most quirk pairs therefore either decay well before reaching FASER (`w ~ 0`) or survive with near certainty (`w ~ 1`), energy loss from IC gluon radiaition  is negligible compared to ionization energy loss in the latter case.
 
 ## Magnetic Field
 

@@ -704,7 +704,7 @@ int main(int argc, char *argv[])
     inputFile.close();
     outputFile.close();
 
-    if (traj && outputFileTrajectory)
+    if (traj && outputFileTrajectory )
     {
         outputFileTrajectory->close();
     }

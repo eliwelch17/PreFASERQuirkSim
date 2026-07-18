@@ -302,7 +302,7 @@ bool apply_range_table_loss(int mq_int,double mq,double Lambda_eV,double z_end_u
     {19.0e6, 20.8e6, 1, Material::Cu},        // TAS copper window
     {140.0e6, 141.0e6, 2, Material::Cu},      // TAN copper (two 25 mm holes at y=±80 mm)
     {380.0e6, 390.0e6, 3, Material::Cc},      // concrete
-    {390.0e6, 480.0e6, 4, Material::Rock},    // rock
+    {390.0e6, 474.6e6, 4, Material::Rock},    // rock
   };
 
   // Coarse arrival time estimate to z=front (ns):
@@ -326,7 +326,7 @@ bool apply_range_table_loss(int mq_int,double mq,double Lambda_eV,double z_end_u
   const double z_conc_start_um = 380.0e6;
   const double z_conc_end_um   = 390.0e6;
   const double z_rock_start_um = 390.0e6;
-  const double z_rock_end_um   = 480.0e6;
+  const double z_rock_end_um   = 474.6e6;
 
   // Beta_z checkpoints (computed from current p/E during the loss pass)
   const double Bz_init = Beta_pair[2];
@@ -381,9 +381,9 @@ bool apply_range_table_loss(int mq_int,double mq,double Lambda_eV,double z_end_u
   const double dz_A = std::max(0.0, std::min(zf, z_conc_start_um) - 0.0);
   // segment B: 380m -> min(front, 390m)  (concrete window)
   const double dz_B = std::max(0.0, std::min(zf, z_conc_end_um) - z_conc_start_um);
-  // segment C: 390m -> min(front, 480m)  (rock window)
+  // segment C: 390m -> min(front, 474.6m)  (rock window)
   const double dz_C = std::max(0.0, std::min(zf, z_rock_end_um) - z_rock_start_um);
-  // segment D: beyond 480m (vacuum)
+  // segment D: beyond 474.6m (vacuum)
   const double dz_D = std::max(0.0, zf - z_rock_end_um);
 
   // A: vacuum-ish, constant initial Beta_z
@@ -455,7 +455,7 @@ bool apply_range_table_loss_zspan(int mq_int,double mq,double Lambda_eV,double z
     {19.0e6, 20.8e6, 1, Material::Cu},
     {140.0e6, 141.0e6, 2, Material::Cu},      // TAN copper (two 25 mm holes at y=±80 mm)
     {380.0e6, 390.0e6, 3, Material::Cc},
-    {390.0e6, 480.0e6, 4, Material::Rock},
+    {390.0e6, 474.6e6, 4, Material::Rock},
   };
 
   for (const auto& s : slabs) {
