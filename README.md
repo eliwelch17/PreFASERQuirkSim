@@ -52,6 +52,22 @@ For Lambda above approximately `1 keV`, numerical instability can become
 non-negligible with the default divider. A divider of `15000` to `20000` is
 recommended for those runs.
 
+## Material Interactions
+
+During normal step-by-step transport, the simulation determines which material
+each quirk occupies at every integration step and applies the corresponding
+ionization energy loss. The modeled material regions are:
+
+- TAS copper from approximately `19.0 m` to `20.8 m`, outside its central 17 mm`-radius aperture
+- TAN copper from approximately `140.0 m` to `141.0 m`, including its transverse geometry and two `25 mm`-radius beam holes centred at `y = +/-80 mm`
+- Concrete from `380 m` to `390 m`
+- Rock from `390 m` to `480 m`
+
+The deterministic stopping-power calculation is first used to estimate the
+distance travelled during the step. The force is then recalculated with a
+Gaussian fluctuation in the material energy loss before the particle state is
+advanced. Material is handled independently for each member of the quirk pair.
+
 ## Fast High-Lambda Transport
 
 For Lambda values of approximately `3 keV` or greater, the study in
@@ -69,7 +85,11 @@ example, with the default back position:
 The simulation analytically transports the pair from `z = 0` to `front` using
 its momentum, mass, and Lambda. Although transverse deflections can be neglected in this regime, accumulated ionization loss cannot. The skipped material loss is therefore calculated with precomputed range tables and applied to the quirk momenta.
 
-The range-table correction includes copper, concrete, and rock. It calculates an effective path length using the oscillation factor and TAS/TAN `Loct()` acceptance, obtains the corresponding beta reduction, and applies a common scale factor to both quirks' three-momenta. This preserves their momentum sharing while slowing the pair.
+The range-table correction includes the same copper, concrete, and rock regions
+used during normal transport. It calculates an effective path length using the
+oscillation factor and TAS/TAN `Loct()` acceptance, obtains the corresponding
+beta reduction, and applies a common scale factor to both quirks' three-momenta.
+This preserves their momentum sharing while slowing the pair.
 
 ## Magnetic Field
 
