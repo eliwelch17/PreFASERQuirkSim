@@ -1,65 +1,94 @@
 # PreFASERQuirkSim
-Simulation of Quirks from ATLAS IP toward FASER adapted from MATHEMATICA simulation written by Junle Pei and Jinmian Li used in https://arxiv.org/pdf/2404.13814 
 
-In an attempt to make this as simple as possible for those who may use this (including theorists without extensive practice with cmake), I have tried to contain the program to mostly a single script with a single compile line. If more is needed, a proper cmake build may be used in the future.
+PreFASERQuirkSim is a C++ simulation of fermionic, colorless quirk-pair transport from the ATLAS interaction point (IP) to FASER. It is adapted from the Mathematica simulation by Junle Pei and Jinmian Li used in arXiv:2404.13814](https://arxiv.org/abs/2404.13814). Macroscopic quirk oscillations present a unique challenge for long-lived particle simulations. Accurately modeling their transport and interactions with material requires integration steps much shorter than the oscillation period, making simulation runtime a significant bottleneck. This program is a  dedicated C++ simulation to propagate quirks efficiently from the ATLAS interaction point to the FASER detector while preserving the required accuracy in their dynamics and material interactions, and offers signicant simulation time reduction from the initial mathematica simulation.
 
+## Requirements
 
+- A C++ compiler with C++17 support
+- `g++` version 7 or later
 
-## Requirements: 
-    g++ v7 or later (check: g++ --version), c++17
+Check the installed compiler version with:
 
-## Compile: 
-    g++ -std=c++17 -o quirk_run quirk_run.cxx src/*
+```bash
+g++ --version
+```
 
-## Usage: 
-    
-    ./quirk_run [-b <back_value m>] [-l <lambda_value eV>] [-betaCut <min Beta-cut off>] [-s <seed>] [-n <# quirks>] [-d <stepsize divider>] [-t (trajectory output flag)] <input file>
+## Compilation
 
+From the project root, run:
 
-    -b how far back to simulate the quirks in m (defult is 476.55m)
+```bash
+g++ -std=c++17 -o quirk_run quirk_run.cxx src/*
+```
 
-    -l energy scale lambda in eV
+## Usage
 
-    -s random seed
+```bash
+./quirk_run [options] <input-file>
+```
 
-    -n number of quirks to simualte (default is all)
+### Options
 
-    -d: the time step size is propotional to lambda^2/d (default is 10000)
+| Option | Description |
+| --- | --- |
+| `-f <front>` | Starting position in meters. The default is `19`. Transport from the IP at `z = 0` to `front` is handled analytically when the fast-transport condition is met. |
+| `-b <back>` | Final longitudinal limit in metres. The default is `474.4`. The simulation returns the quirks at the final minimum in their oscillation before this limit for use by the Athena Geant4 quirks extension. |
+| `-l <lambda>` | Confinement scale, Lambda, in eV. The default is `500`. |
+| `-betaCut <beta>` | Minimum pair beta below which the event is stopped. The default is `0.1`. |
+| `-s <seed>` | Random-number seed. The default is `0`. |
+| `-n <count>` | Number of quirk pairs to simulate. By default, all input events are simulated. |
+| `-d <divider>` | Time-step divider. The step size is proportional to `Lambda^2 / divider`. The default is `10000`. |
+| `-skip <count>` | Number of input events to skip. The default is `0`. |
+| `-r <run-number>` | Run number included in the output filename. The default is `0`. |
+| `-t` | Write trajectory output sampled every `0.01 ns`. Disabled by default. |
 
-    -t: option to record the position of the quirks every .01 ns simluated time, given for quirk1 (default is false)
+Example:
 
+```bash
+./quirk_run -f 19 -b 474.4 -l 500 -s 0 -n 100 Quirk_masses/quirkE_200GeV_0004.dat
+```
 
-## Validation: 
-    The code validates well against the original Mathematica code. The remaining issue is a small numerical instability resulting from loss of precision in Mathematica which compounds over many steps, which means it becomes noticeable for large lambda. Even for large lambda however, the arrival time and maximum transverse position and momentum remain unchanged. 
+For Lambda above approximately `1 keV`, numerical instability can become
+non-negligible with the default divider. A divider of `15000` to `20000` is
+recommended for those runs.
 
-    Comparrisons of the quirks trajectories for various lambdas and 200 GeV quirks are located in validation_plots folder. Note that the sampling frequency of the trajectory is less than the oscillation frequency.
-    
-    NB: It is rather difficult to get Mathematica and C++ to extract random numbers with the same seed so for the validation runs, the Gaussian de/dx functions simply returned a constant to be able to compare the two. 
+## Fast High-Lambda Transport
 
-    Regardless, the differences accrued by numerical instability are a negligible error compared to those introduced by the random walk effect from de/dx.
+For Lambda values of approximately `3 keV` or greater, the study in
+[arXiv:2404.13814](https://arxiv.org/abs/2404.13814) finds that deflection from
+material and magnetic fields is negligible relative to the strong infracolor
+force. These deflections are rapidly washed out over many oscillations, making per-step transport over the entire IP-to-FASER distance unnecessarily expensive.
 
-## Simulation time improvement:
-    the c++ code seems to be about 15-80x faster than the Mathematica code
+To use fast transport over the full distance, set `front` equal to `back`. For
+example, with the default back position:
 
-## Magnetic field
+```bash
+./quirk_run -f 474.4 -b 474.4 -l 3000 <input-file>
+```
 
-    The original mathematica code only included the D1 and D2 LHC dipole magnets and provided a nearly uniform field. This c++ simulation now includes realistic field maps of each magnet: D1,D2, inner quadrupoles,reverse inner quadrupoles, main dipoles, and main quadrupole magnets. A KDTree is used to quickly obtain the field value at a given point.
+The simulation analytically transports the pair from `z = 0` to `front` using
+its momentum, mass, and Lambda. Although transverse deflections can be neglected in this regime, accumulated ionization loss cannot. The skipped material loss is therefore calculated with precomputed range tables and applied to the quirk momenta.
 
+The range-table correction includes copper, concrete, and rock. It calculates an effective path length using the oscillation factor and TAS/TAN `Loct()` acceptance, obtains the corresponding beta reduction, and applies a common scale factor to both quirks' three-momenta. This preserves their momentum sharing while slowing the pair.
 
-    The B-fields of the inner quadrupole magnets differ by year, however they differ only by a sign, thus they should have the same effect on the FASER acceptance for the quirks. The scaling factor for 2024 is usued as it has the largest integrated luminosity.
+## Magnetic Field
 
+The original Mathematica simulation included only the D1 and D2 LHC dipole magnets with a nearly uniform field. This implementation uses realistic field maps for the following magnets:
 
-    The B-field resolution has 1/4 x 1/4  (transverse plane) of that in the provided field maps yielding 1cm transverse resolution. 
+- D1 and D2 dipoles
+- Inner quadrupoles
+- Reverse inner quadrupoles
+- Main dipoles
+- Main quadrupoles
 
+A three-dimensional KD-tree is used to retrieve the magnetic field efficiently at each position. The field maps have `1 cm x 1 cm` resolution.
 
-    B-field info courtesy of Alex Keyken from the BDSIM https://www.pp.rhul.ac.uk/bdsim/manual/ dev team.
+The inner-quadrupole fields differ between years only by sign, so they are
+expected to have the same effect on quirk acceptance at FASER. The 2024 scaling factor is used because that year has the largest integrated luminosity.
 
-   
+Magnetic-field information is courtesy of Alex Keyken and the
+[BDSIM development team](https://www.pp.rhul.ac.uk/bdsim/manual/).
 
-#High lambda ionizatoin loss
+## Performance
 
-For high-\(\Lambda\) runs where we start the simulation near `back` (skipping 0\(\rightarrow\)`front`), we correct the skipped material energy loss using **precomputed range tables** (Cu/concrete/rock). We compute an effective material path length (oscillation factor + TAS/TAN `Loct()` acceptance), look up the corresponding \(\beta\) drop, and apply it as a **common scale factor** to both quirks’ 3-momenta (preserving momentum sharing while slowing the pair).
-
-
-
-
+This C++ implementation has been seen to be approximately 20 to 100 times faster than the original Mathematica simulation, depending on the simulation parameters, quirk model, and quirk trajectory.
