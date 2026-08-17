@@ -32,7 +32,7 @@ g++ -std=c++17 -o quirk_run quirk_run.cxx src/*
 | Option | Description |
 | --- | --- |
 | `-f <front>` | Starting position in meters. The default is `19`. Transport from the IP at `z = 0` to `front` is handled analytically when the fast-transport condition is met. |
-| `-b <back>` | Final longitudinal limit in metres. The default is `474.4`. The simulation returns the quirks at the final minimum in their oscillation before this limit for use by the Athena Geant4 quirks extension. |
+| `-b <back>` | Final longitudinal limit in metres. The default is `474.4`. The simulation returns the quirks at the final minimum in their oscillation before this limit for use by the Athena Geant4 quirks extension which assumes the quirks start at a minimum. |
 | `-l <lambda>` | Confinement scale, Lambda, in eV. The default is `500`. |
 | `-betaCut <beta>` | Minimum pair beta below which the event is stopped. The default is `0.1`. |
 | `-s <seed>` | Random-number seed. The default is `0`. |
@@ -59,7 +59,7 @@ each quirk occupies at every integration step and applies the corresponding
 ionization energy loss. The modeled material regions are:
 
 - TAS copper from approximately `19.0 m` to `20.8 m`, outside its central 17 mm`-radius aperture
-- TAN copper from approximately `140.0 m` to `141.0 m`, including its transverse geometry and two `25 mm`-radius beam holes centred at `y = +/-80 mm`
+- TAN copper from approximately `140.0 m` to `141.0 m`, including its transverse geometry and two `25 mm`-radius beam holes centred at `x = +/-80 mm`
 - Concrete from `380 m` to `390 m`
 - Rock from `390 m` to `474.6 m`
 

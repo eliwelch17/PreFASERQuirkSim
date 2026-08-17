@@ -8,8 +8,6 @@ using namespace std;
 
 static bool InTanCopper(double x, double y, double z)
 {
-//from : https://lss.fnal.gov/archive/test-fn/0000/fermilab-fn-0732.pdf
-    // tan copper  at z  140.5 m with two beam holes (vacuum)
     if (abs(z - 140.5e6) >= 0.5e6)
         return false;
     if (abs(x) >= (0.094 / 2) * 1e6)
@@ -17,12 +15,11 @@ static bool InTanCopper(double x, double y, double z)
     if (abs(y + (0.605 / 2 - 0.067) * 1e6) >= (0.605 / 2) * 1e6)
         return false;
 
-    // beam holes: r = 25 mm, centers at y = +/-80 mm 
     const double hole_r = 0.025e6;
-    const double hole_y = 0.08e6;
-    if (sqrt(x * x + (y - hole_y) * (y - hole_y)) < hole_r)
+    const double hole_x = 0.08e6;
+    if (sqrt((x - hole_x) * (x - hole_x) + y * y) < hole_r)
         return false;
-    if (sqrt(x * x + (y + hole_y) * (y + hole_y)) < hole_r)
+    if (sqrt((x + hole_x) * (x + hole_x) + y * y) < hole_r)
         return false;
 
     return true;
@@ -53,8 +50,6 @@ static inline void add_z_breakpoint(std::vector<double> &bp, double z, double z0
         bp.push_back(z);
 }
 
-// analytic copper fraction along COM ray x=(bx/bz)*z, y=(by/bz)*z over [z0,z1]
-// used by within_half range table loss for TAS/TAN transverse acceptance
 double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
                                    double bx, double by, double bz)
 {
@@ -83,7 +78,7 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
         const double half_y = (0.605 / 2) * 1e6;
         const double y_off = (0.605 / 2 - 0.067) * 1e6;
         const double hole_r = 0.025e6;
-        const double hole_y = 0.08e6;
+        const double hole_x = 0.08e6;
 
         auto add_linear = [&](double k, double val) {
             if (std::abs(k) > 0.0)
@@ -94,12 +89,12 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
         add_linear(ky, half_y - y_off);
         add_linear(ky, -half_y - y_off);
 
-        auto add_circle = [&](double yc) {
+        auto add_circle = [&](double xc) {
             const double A = kx * kx + ky * ky;
             if (A <= 0.0)
                 return;
-            const double B = -2.0 * ky * yc;
-            const double C = yc * yc - hole_r * hole_r;
+            const double B = -2.0 * kx * xc;
+            const double C = xc * xc - hole_r * hole_r;
             const double D = B * B - 4.0 * A * C;
             if (D < 0.0)
                 return;
@@ -107,8 +102,8 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
             add_z_breakpoint(bp, (-B - sd) / (2.0 * A), z0_um, z1_um);
             add_z_breakpoint(bp, (-B + sd) / (2.0 * A), z0_um, z1_um);
         };
-        add_circle(hole_y);
-        add_circle(-hole_y);
+        add_circle(hole_x);
+        add_circle(-hole_x);
     }
 
     bp.push_back(z1_um);
