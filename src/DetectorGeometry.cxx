@@ -6,13 +6,27 @@
 
 using namespace std;
 
-static bool InTanCopper(double x, double y, double z)
+// TAN piece 1: only this piece was included in the original Mathematica implementaton
+static bool InTanPiece1(double x, double y, double z)
 {
     if (abs(z - 140.5e6) >= 0.5e6)
         return false;
     if (abs(x) >= (0.094 / 2) * 1e6)
         return false;
-    if (abs(y + (0.605 / 2 - 0.067) * 1e6) >= (0.605 / 2) * 1e6)
+    if (abs(y - (0.605 / 2 - 0.067) * 1e6) >= (0.605 / 2) * 1e6)
+        return false;
+
+    return true;
+}
+
+// https://lss.fnal.gov/archive/test-fn/0000/fermilab-fn-0732.pdf
+static bool InTanPiece2(double x, double y, double z)
+{
+    if (abs(z - 141.75e6) >= 1.75e6)
+        return false;
+    if (abs(x) >= 0.130e6)
+        return false;
+    if (abs(y) >= 0.105e6)
         return false;
 
     const double hole_r = 0.025e6;
@@ -21,8 +35,15 @@ static bool InTanCopper(double x, double y, double z)
         return false;
     if (sqrt((x + hole_x) * (x + hole_x) + y * y) < hole_r)
         return false;
+    if (InTanPiece1(x, y, z))
+        return false;
 
     return true;
+}
+
+static bool InTanCopper(double x, double y, double z)
+{
+    return InTanPiece1(x, y, z) || InTanPiece2(x, y, z);
 }
 
 int Loct(double x, double y, double z)
@@ -32,12 +53,16 @@ int Loct(double x, double y, double z)
          InTanCopper(x, y, z) ||
          (abs(z - 385.0e6) < 5.0e6) || (abs(z - 432.3e6) < 42.3e6)))
     {
+        // TAS
         if ((sqrt(x * x + y * y) > 0.017e6) && (abs(z - 19.9e6) < 0.9e6))
             return 1;
+        // TAN
         if (InTanCopper(x, y, z))
             return 2;
+        // CONCRETE
         if (abs(z - 385.0e6) < 5.0e6)
             return 3;
+        // ROCK
         if (abs(z - 432.3e6) < 42.3e6)
             return 4;
     }
@@ -63,7 +88,7 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
     const double k_perp = std::hypot(kx, ky);
 
     std::vector<double> bp;
-    bp.reserve(16);
+    bp.reserve(24);
     bp.push_back(z0_um);
 
     if (loct_code == 1)
@@ -74,9 +99,11 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
     }
     else if (loct_code == 2)
     {
-        const double half_x = (0.094 / 2) * 1e6;
-        const double half_y = (0.605 / 2) * 1e6;
-        const double y_off = (0.605 / 2 - 0.067) * 1e6;
+        const double piece1_half_x = (0.094 / 2) * 1e6;
+        const double piece1_half_y = (0.605 / 2) * 1e6;
+        const double piece1_y_off = (0.605 / 2 - 0.067) * 1e6;
+        const double piece2_half_x = 0.130e6;
+        const double piece2_half_y = 0.105e6;
         const double hole_r = 0.025e6;
         const double hole_x = 0.08e6;
 
@@ -84,10 +111,15 @@ double fraction_in_loct_com(int loct_code, double z0_um, double z1_um,
             if (std::abs(k) > 0.0)
                 add_z_breakpoint(bp, val / k, z0_um, z1_um);
         };
-        add_linear(kx, half_x);
-        add_linear(kx, -half_x);
-        add_linear(ky, half_y - y_off);
-        add_linear(ky, -half_y - y_off);
+        add_z_breakpoint(bp, 141.0e6, z0_um, z1_um);
+        add_linear(kx, piece1_half_x);
+        add_linear(kx, -piece1_half_x);
+        add_linear(ky, piece1_y_off + piece1_half_y);
+        add_linear(ky, piece1_y_off - piece1_half_y);
+        add_linear(kx, piece2_half_x);
+        add_linear(kx, -piece2_half_x);
+        add_linear(ky, piece2_half_y);
+        add_linear(ky, -piece2_half_y);
 
         auto add_circle = [&](double xc) {
             const double A = kx * kx + ky * ky;
